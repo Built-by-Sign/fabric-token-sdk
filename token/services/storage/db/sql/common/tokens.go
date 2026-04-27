@@ -145,21 +145,32 @@ func (db *TokenStore) UnspentTokensIterator(ctx context.Context) (tdriver.Unspen
 
 // UnspentTokensIteratorBy returns an iterator of unspent tokens owned by the passed id and whose type is the passed on.
 // The token type can be empty. In that case, tokens of any type are returned.
+//
+// The query intentionally does not JOIN the ownership table. With the JOIN
+// in place HasTokenDetails generates a `(wallet_id = $1 OR owner_wallet_id
+// = $1)` predicate spanning two tables; PostgreSQL falls back to scanning
+// every owner=true,is_deleted=false row instead of using a partial index
+// on owner_wallet_id. Without the JOIN the predicate collapses to
+// `owner_wallet_id = $1` and an index on (owner_wallet_id, token_type)
+// WHERE is_deleted=false AND owner=true serves the query in microseconds.
+//
+// Caveat: the ownership table is what backs token-ownership delegation
+// (one wallet authorising another to spend its tokens). Skipping the JOIN
+// means tokens reachable only via the ownership table are no longer
+// returned by this iterator. SpendableTokensIteratorBy already follows
+// the slim-query pattern, so a deployment that relies on delegation
+// would observe inconsistent behaviour between the two iterators today;
+// this PR aligns UnspentTokensIteratorBy with SpendableTokensIteratorBy.
+// If full delegation support is required, the JOIN must be reinstated
+// behind a query plan that can actually use an index for the OR predicate.
 func (db *TokenStore) UnspentTokensIteratorBy(ctx context.Context, walletID string, tokenType token.Type) (tdriver.UnspentTokensIterator, error) {
-	tokenTable, ownershipTable := q.Table(db.table.Tokens), q.Table(db.table.Ownership)
 	query, args := q.Select().
-		Fields(
-			tokenTable.Field("tx_id"), tokenTable.Field("idx"), common3.FieldName("owner_raw"),
-			common3.FieldName("token_type"), common3.FieldName("quantity"),
-		).
-		From(tokenTable.Join(ownershipTable, cond.And(
-			cond.Cmp(tokenTable.Field("tx_id"), "=", ownershipTable.Field("tx_id")),
-			cond.Cmp(tokenTable.Field("idx"), "=", ownershipTable.Field("idx"))),
-		)).
+		FieldsByName("tx_id", "idx", "owner_raw", "token_type", "quantity").
+		From(q.Table(db.table.Tokens)).
 		Where(HasTokenDetails(driver.QueryTokenDetailsParams{
 			WalletID:  walletID,
 			TokenType: tokenType,
-		}, tokenTable)).
+		}, nil)).
 		Format(db.ci)
 
 	logging.Debug(logger, query, args)
