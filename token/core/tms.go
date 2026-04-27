@@ -202,7 +202,7 @@ func (m *TMSProvider) getTokenManagerService(opts driver.ServiceOptions) (servic
 	if m.callback != nil {
 		err = m.callback(service, opts.Network, opts.Channel, opts.Namespace)
 		if err != nil {
-			logger.Fatalf("failed to initialize tms for [%s]: [%s]", opts, err)
+			return nil, errors.WithMessagef(err, "failed to initialize tms for [%s]", opts)
 		}
 	}
 
