@@ -188,6 +188,14 @@ func (c *CollectEndorsementsView) requestSignatures(signers []view.Identity, ver
 		return nil, err
 	}
 
+	// Hoist the service handles that the per-party loop touches on every
+	// iteration. TokenService / WalletManager / SigService are trivial
+	// field returns, but extracting them removes the visual noise of
+	// chained calls inside the hot path.
+	tms := c.tx.TokenService()
+	wm := tms.WalletManager()
+	sigSvc := tms.SigService()
+
 	sigmas := make(map[string][]byte)
 	for i, signerIdentity := range signers {
 		// we have the following possibilities:
@@ -224,35 +232,55 @@ func (c *CollectEndorsementsView) requestSignatures(signers []view.Identity, ver
 			continue
 		}
 
-		// Case: there is a signer locally bound to the party, use it to generate the signature
-		if signer, err := c.tx.TokenService().SigService().GetSigner(context.Context(), signerIdentity); err == nil {
-			logger.DebugfContext(context.Context(), "found signer for party [%s], request local signature", signerIdentity)
-			sigma, err := c.signLocal(context.Context(), signerIdentity, signer, requestRaw)
-			if err != nil {
-				return nil, errors.WithMessagef(err, "failed signing local for party [%s]", signerIdentity)
-			}
-			sigmas[signerIdentity.UniqueID()] = sigma
+		// Probe external wallet first: GetSigner has to parse an x509 cert and
+		// load the private key from BCCSP, which always fails for identities
+		// whose private key is held in an external KMS. When most wallets in a
+		// deployment are KMS-backed, the GetSigner-first ordering wastes the
+		// majority of CPU on a code path that is guaranteed to miss; under
+		// stress (c=100) DeserializeSigner accounted for 73% cumulative CPU on
+		// the institution node before this reorder. Probing the wallet first
+		// short-circuits to signExternal in O(1), and falls through to the
+		// local signer path only when the wallet exists but has no external
+		// signer registered.
+		//
+		// Case: there is a wallet bound to the party with an external signer registered
+		if w, werr := wm.OwnerWallet(context.Context(), signerIdentity); werr == nil {
+			if ews := c.Opts.ExternalWalletSigner(w.ID()); ews != nil {
+				logger.DebugfContext(context.Context(), "found wallet for party [%s], request external signature", signerIdentity)
+				externalWallets[w.ID()] = ews
+				sigma, err := c.signExternal(context.Context(), signerIdentity, ews, requestRaw)
+				if err != nil {
+					return nil, errors.WithMessagef(err, "failed signing external for party [%s]", signerIdentity)
+				}
+				sigmas[signerIdentity.UniqueID()] = sigma
 
-			continue
-		} else {
-			logger.DebugfContext(context.Context(), "failed to find a signer for party [%s]: [%s]", signerIdentity, err)
+				continue
+			}
+			// wallet exists but no ExternalWalletSigner registered — fall through to local signer
 		}
 
-		// Case: there is a wallet bound to the party but the signer is not local, the signature is generated externally
-		if w, err := c.tx.TokenService().WalletManager().OwnerWallet(context.Context(), signerIdentity); err == nil {
-			logger.DebugfContext(context.Context(), "found wallet for party [%s], request external signature", signerIdentity)
-			ews := c.Opts.ExternalWalletSigner(w.ID())
-			if ews == nil {
-				return nil, errors.Errorf("no external wallet signer found for [%s][%s]", w.ID(), signerIdentity)
-			}
-			externalWallets[w.ID()] = ews
-			sigma, err := c.signExternal(context.Context(), signerIdentity, ews, requestRaw)
-			if err != nil {
-				return nil, errors.WithMessagef(err, "failed signing external for party [%s]", signerIdentity)
-			}
-			sigmas[signerIdentity.UniqueID()] = sigma
+		// Gate the local-signer path with a cheap IsMe probe. GetSigner on a
+		// cache miss runs x509 parse + BCCSP key load and, for KMS-backed
+		// identities, fails after the expensive deserialize without populating
+		// the cache, so every retry repeats the work. IsMe (in-memory map
+		// check + KVS existence query) returns false in O(1) when no local
+		// signer is registered, letting the external-wallet and remote paths
+		// take over without paying the deserialize cost.
+		//
+		// Case: there is a signer locally bound to the party, use it to generate the signature
+		if sigSvc.IsMe(context.Context(), signerIdentity) {
+			if signer, err := sigSvc.GetSigner(context.Context(), signerIdentity); err == nil {
+				logger.DebugfContext(context.Context(), "found signer for party [%s], request local signature", signerIdentity)
+				sigma, err := c.signLocal(context.Context(), signerIdentity, signer, requestRaw)
+				if err != nil {
+					return nil, errors.WithMessagef(err, "failed signing local for party [%s]", signerIdentity)
+				}
+				sigmas[signerIdentity.UniqueID()] = sigma
 
-			continue
+				continue
+			} else {
+				logger.DebugfContext(context.Context(), "failed to find a signer for party [%s]: [%s]", signerIdentity, err)
+			}
 		}
 
 		// Case: the signature must be generated by a remote party
