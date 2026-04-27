@@ -724,6 +724,12 @@ func (l *LocalMembership) addLocalIdentity(ctx context.Context, config *Identity
 	if !keyManager.Anonymous() {
 		l.logger.Debugf("adding identity mapping for [%s]", resolvedIdentity)
 		l.localIdentitiesByIdentity[resolvedIdentity.String()] = localIdentity
+		// Also cache by the raw-bytes key. GetIdentifier (lm.go ~line 257)
+		// looks an identity up using both string(id) (raw bytes, 64-byte
+		// envelope) and id.String() (SHA256-base64). Without the raw-bytes
+		// entry the first lookup always misses and forces refreshAndGet's
+		// slow Lock path even when the identity is already registered.
+		l.localIdentitiesByIdentity[string(resolvedIdentity)] = localIdentity
 		if err := l.IdentityProvider.Bind(ctx, l.defaultNetworkIdentity, resolvedIdentity); err != nil {
 			return errors.WithMessagef(err, "cannot bind identity for [%s,%s]", resolvedIdentity, eID)
 		}
