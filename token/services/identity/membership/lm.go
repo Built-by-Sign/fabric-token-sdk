@@ -176,6 +176,11 @@ type LocalMembership struct {
 	localIdentitiesByName     map[string][]LocalIdentityWithPriority
 	localIdentitiesByIdentity map[string]*LocalIdentity
 	localIdentitiesByConfig   map[string]*LocalIdentity
+	// labels known to not resolve. Without negative caching every audit
+	// pass against a non-local label re-takes the write lock and reloads
+	// stored identity configurations from PG; on a busy auditor that
+	// serialises every audit on a single mutex.
+	localIdentitiesNegative   map[string]struct{}
 	targetIdentities          []view.Identity // optional list of identities to prefer
 	anonymous                 bool            // when true, only anonymous identities are considered selectable by default
 	closeOnce                 sync.Once
@@ -212,6 +217,7 @@ func NewLocalMembership(
 		localIdentitiesByName:     map[string][]LocalIdentityWithPriority{},
 		localIdentitiesByIdentity: map[string]*LocalIdentity{},
 		localIdentitiesByConfig:   map[string]*LocalIdentity{},
+		localIdentitiesNegative:   map[string]struct{}{},
 		IdentityType:              identityType,
 		KeyManagerProviders:       keyManagerProviders,
 		anonymous:                 defaultAnonymous,
@@ -340,6 +346,7 @@ func (l *LocalMembership) Load(ctx context.Context, identities []idriver.Configu
 	l.localIdentities = make([]*LocalIdentity, 0)
 	l.localIdentitiesByName = make(map[string][]LocalIdentityWithPriority, 0)
 	l.localIdentitiesByConfig = make(map[string]*LocalIdentity, 0)
+	l.localIdentitiesNegative = make(map[string]struct{}, 0)
 
 	// prepare all identity configurations
 	identityConfigurations, defaults, err := l.toIdentityConfiguration(identities)
@@ -742,10 +749,32 @@ func (l *LocalMembership) addLocalIdentity(ctx context.Context, config *Identity
 }
 
 func (l *LocalMembership) refreshAndGet(ctx context.Context, label string) *LocalIdentity {
+	// Fast path: try the read lock first. The audit hot path runs IsMine
+	// over every output identity in a transaction, and most of those
+	// labels never resolve at the auditor (they belong to user wallets on
+	// other nodes). Without an RLock fast path and a negative cache, every
+	// such miss took the write lock and reloaded identity configurations
+	// from PG, serialising audits on a single mutex.
+	l.localIdentitiesMutex.RLock()
+	if identities, ok := l.localIdentitiesByName[label]; ok {
+		l.localIdentitiesMutex.RUnlock()
+		return identities[0].Identity
+	}
+	if mapped, ok := l.localIdentitiesByIdentity[label]; ok {
+		l.localIdentitiesMutex.RUnlock()
+		return mapped
+	}
+	if _, ok := l.localIdentitiesNegative[label]; ok {
+		l.localIdentitiesMutex.RUnlock()
+		return nil
+	}
+	l.localIdentitiesMutex.RUnlock()
+
+	// Slow path: load + register requires the write lock.
 	l.localIdentitiesMutex.Lock()
 	defer l.localIdentitiesMutex.Unlock()
 
-	// Double check
+	// Double check (another writer may have populated while we waited).
 	identities, ok := l.localIdentitiesByName[label]
 	if ok {
 		return identities[0].Identity
@@ -753,6 +782,9 @@ func (l *LocalMembership) refreshAndGet(ctx context.Context, label string) *Loca
 	mapped, ok := l.localIdentitiesByIdentity[label]
 	if ok {
 		return mapped
+	}
+	if _, ok := l.localIdentitiesNegative[label]; ok {
+		return nil
 	}
 
 	l.logger.DebugfContext(ctx, "refresh and get local identity for label [%s]", utils.Hashable(label))
@@ -785,6 +817,11 @@ func (l *LocalMembership) refreshAndGet(ctx context.Context, label string) *Loca
 		return mapped
 	}
 
+	// Mark as negative so subsequent lookups for the same label hit the
+	// fast RLock path. Positive lookups always run before the negative
+	// check, so a later registerIdentityConfiguration of this label still
+	// resolves correctly even without explicit negative-cache invalidation.
+	l.localIdentitiesNegative[label] = struct{}{}
 	return nil
 }
 
