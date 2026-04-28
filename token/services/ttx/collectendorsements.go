@@ -87,6 +87,7 @@ func NewCollectEndorsementsView(tx *Transaction, opts ...EndorsementsOpt) *Colle
 func (c *CollectEndorsementsView) Call(context view.Context) (interface{}, error) {
 	metrics := GetMetrics(context)
 	start := time.Now()
+	txID := c.tx.ID()
 
 	externalWallets := make(map[string]ExternalWalletSigner)
 
@@ -94,15 +95,19 @@ func (c *CollectEndorsementsView) Call(context view.Context) (interface{}, error
 	defer c.CleanupExternalWallets(context, externalWallets)
 
 	// 1. First collect signatures on the token request
+	pIssue := time.Now()
 	issueSigmas, err := c.requestSignaturesOnIssues(context, externalWallets)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "failed requesting signatures on issues")
 	}
+	logger.Infof("[phase-timing] tx=%s phase=ce_sigs_issues elapsed_ms=%d", txID, time.Since(pIssue).Milliseconds())
 
+	pTransfer := time.Now()
 	transferSigmas, err := c.requestSignaturesOnTransfers(context, externalWallets)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "failed requesting signatures on transfers")
 	}
+	logger.Infof("[phase-timing] tx=%s phase=ce_sigs_transfers elapsed_ms=%d", txID, time.Since(pTransfer).Milliseconds())
 
 	// Add the signatures to the token request
 	logger.DebugfContext(context.Context(), "Add the signatures to the token request")
@@ -112,20 +117,25 @@ func (c *CollectEndorsementsView) Call(context view.Context) (interface{}, error
 
 	// 2. Audit
 	if !c.Opts.SkipAuditing {
+		pAudit := time.Now()
 		_, err := c.requestAudit(context)
 		if err != nil {
 			return nil, errors.WithMessagef(err, "failed requesting auditing")
 		}
+		logger.Infof("[phase-timing] tx=%s phase=ce_audit elapsed_ms=%d", txID, time.Since(pAudit).Milliseconds())
 	}
 	// 3. Endorse and return the transaction envelope
 	if !c.Opts.SkipApproval {
+		pApprove := time.Now()
 		logger.DebugfContext(context.Context(), "Request approval from endorser")
 		_, err = c.requestApproval(context)
 		if err != nil {
 			return nil, errors.WithMessagef(err, "failed requesting approval")
 		}
+		logger.Infof("[phase-timing] tx=%s phase=ce_approval elapsed_ms=%d", txID, time.Since(pApprove).Milliseconds())
 	}
 	// Distribute Env to all parties
+	pDistribute := time.Now()
 	distributionList := append(IssueDistributionList(c.tx.TokenRequest), TransferDistributionList(c.tx.TokenRequest)...)
 	logger.DebugfContext(context.Context(), "distribute tx to [%d] involved parties", len(distributionList))
 	if err := c.distributeTxToParties(context, distributionList, nil); err != nil {
@@ -133,14 +143,17 @@ func (c *CollectEndorsementsView) Call(context view.Context) (interface{}, error
 
 		return nil, errors.WithMessagef(err, "failed distributing tx")
 	}
+	logger.Infof("[phase-timing] tx=%s phase=ce_distribute elapsed_ms=%d distribution_list=%d", txID, time.Since(pDistribute).Milliseconds(), len(distributionList))
 
 	// Cleanup audit
+	pCleanup := time.Now()
 	logger.DebugfContext(context.Context(), "Cleanup audit")
 	if err := c.cleanupAudit(context); err != nil {
 		logger.ErrorfContext(context.Context(), "failed cleaning up audit: %s", err)
 
 		return nil, errors.WithMessagef(err, "failed cleaning up audit")
 	}
+	logger.Infof("[phase-timing] tx=%s phase=ce_cleanup elapsed_ms=%d", txID, time.Since(pCleanup).Milliseconds())
 
 	logger.DebugfContext(context.Context(), "CollectEndorsementsView done.")
 
@@ -412,25 +425,30 @@ func (c *CollectEndorsementsView) distributeTxToParties(context view.Context, di
 	// Distribute the transaction to all parties in the distribution list.
 	// Filter the metadata by Enrollment ID.
 	// The auditor will receive the full set of metadata
+	pPrep := time.Now()
 	finalDistributionList, err := c.prepareDistributionList(context, auditors, distributionList)
 	if err != nil {
 		return errors.Wrap(err, "failed preparing distribution list")
 	}
+	logger.Infof("[phase-timing] tx=%s phase=ce_prepare_dist_list elapsed_ms=%d", c.tx.ID(), time.Since(pPrep).Milliseconds())
 
 	owner := NewOwner(context, c.tx.TokenService())
 
 	// Store transaction in the token transaction database
+	pStore := time.Now()
 	logger.DebugfContext(context.Context(), "Store transaction records")
 	if err := StoreTransactionRecords(context, c.tx); err != nil {
 		return errors.Wrapf(err, "failed adding transaction %s to the token transaction database", c.tx.ID())
 	}
+	logger.Infof("[phase-timing] tx=%s phase=ce_store_tx_records elapsed_ms=%d", c.tx.ID(), time.Since(pStore).Milliseconds())
 
 	logger.DebugfContext(context.Context(), "start distributing to %d parties", len(finalDistributionList))
+	skipped := 0
 	for i, entry := range finalDistributionList {
 		// If it is me, no need to open a remote connection. Just store the envelope locally.
 		if entry.IsMe && !entry.Auditor {
 			logger.DebugfContext(context.Context(), "tx [%d] is me [%s], endorse locally", i, entry.ID)
-
+			skipped++
 			continue
 		} else {
 			logger.DebugfContext(context.Context(), "tx [%d] is not me [%s:%s], ask endorse", i, entry.ID, entry.EID)
@@ -459,11 +477,14 @@ func (c *CollectEndorsementsView) distributeTxToParties(context view.Context, di
 		// This operation might be retried, but this requires a change of protocol to make sure the recipient can always receive.
 		// It could be done by using a new context.
 		logger.DebugfContext(context.Context(), "Distribute to %s", entry.EID)
+		pParty := time.Now()
 		if err := c.distributeTxToParty(context, &entry, txRaw, owner); err != nil {
 			return errors.Wrapf(err, "failed distribute evn of tx [%s] to party [%s:%s]", c.tx.ID(), entry.EID, entry.ID)
 		}
+		logger.Infof("[phase-timing] tx=%s phase=ce_distribute_party party=%s elapsed_ms=%d bytes=%d", c.tx.ID(), entry.EID, time.Since(pParty).Milliseconds(), len(txRaw))
 		logger.DebugfContext(context.Context(), "Done distributing to %s", entry.EID)
 	}
+	logger.Infof("[phase-timing] tx=%s phase=ce_distribute_summary parties=%d skipped_self=%d", c.tx.ID(), len(finalDistributionList), skipped)
 
 	return nil
 }
@@ -475,17 +496,20 @@ func (c *CollectEndorsementsView) distributeTxToParty(
 	owner *TxOwner,
 ) error {
 	// Open a session to the party. and send the transaction.
+	pSession := time.Now()
 	session, err := c.getSession(context, entry.ID)
 	if err != nil {
 		return errors.Wrap(err, "failed getting session")
 	}
 	// Send the content
+	pSend := time.Now()
 	logger.DebugfContext(context.Context(), "Send transaction content")
 	err = session.SendWithContext(context.Context(), txRaw)
 	if err != nil {
 		return errors.Wrap(err, "failed sending transaction content")
 	}
 
+	pRecv := time.Now()
 	logger.DebugfContext(context.Context(), "Wait for ack")
 	jsonSession := session2.NewFromSession(context, session)
 	sigma, err := jsonSession.ReceiveRawWithTimeout(time.Minute)
@@ -496,6 +520,7 @@ func (c *CollectEndorsementsView) distributeTxToParty(
 		entry.LongTerm, utils.Hashable(sigma).String(),
 		utils.Hashable(txRaw).String())
 
+	pVerify := time.Now()
 	logger.DebugfContext(context.Context(), "Verify signature")
 	sigService, err := sig.GetService(context)
 	if err != nil {
@@ -508,6 +533,13 @@ func (c *CollectEndorsementsView) distributeTxToParty(
 	if err := verifier.Verify(txRaw, sigma); err != nil {
 		return errors.Wrapf(err, "failed verifying ack signature from [%s]", entry.ID)
 	}
+	// Split distributeTxToParty into 4 sub-phases so we know whether
+	// ce_distribute is bottlenecked by session setup, network send, recv
+	// (waiting for peer), or verify (CPU).
+	logger.Infof("[phase-timing] tx=%s phase=ce_dp_session party=%s elapsed_ms=%d", c.tx.ID(), entry.EID, pSend.Sub(pSession).Milliseconds())
+	logger.Infof("[phase-timing] tx=%s phase=ce_dp_send    party=%s elapsed_ms=%d", c.tx.ID(), entry.EID, pRecv.Sub(pSend).Milliseconds())
+	logger.Infof("[phase-timing] tx=%s phase=ce_dp_recv    party=%s elapsed_ms=%d", c.tx.ID(), entry.EID, pVerify.Sub(pRecv).Milliseconds())
+	logger.Infof("[phase-timing] tx=%s phase=ce_dp_verify  party=%s elapsed_ms=%d", c.tx.ID(), entry.EID, time.Since(pVerify).Milliseconds())
 
 	logger.DebugfContext(context.Context(), "CollectEndorsementsView: collected signature from %s", entry.ID)
 
