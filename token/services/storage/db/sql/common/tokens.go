@@ -291,8 +291,10 @@ func (it *dedupedTokenRowsIterator) Next() (*token.UnspentToken, error) {
 			continue
 		}
 		it.seen[key] = struct{}{}
+
 		return &t, nil
 	}
+
 	return nil, nil
 }
 
