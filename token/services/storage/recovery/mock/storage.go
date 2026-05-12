@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hyperledger-labs/fabric-token-sdk/token/services/storage"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/storage/recovery"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/storage/ttxdb"
 )
@@ -58,8 +59,59 @@ type Storage struct {
 	releaseRecoveryClaimReturnsOnCall map[int]struct {
 		result1 error
 	}
+	SetStatusStub        func(context.Context, string, storage.TxStatus, string) error
+	setStatusMutex       sync.RWMutex
+	setStatusArgsForCall []struct {
+		arg1 context.Context
+		arg2 string
+		arg3 storage.TxStatus
+		arg4 string
+	}
+	setStatusReturns struct {
+		result1 error
+	}
+	setStatusReturnsOnCall map[int]struct {
+		result1 error
+	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
+}
+
+func (fake *Storage) SetStatus(arg1 context.Context, arg2 string, arg3 storage.TxStatus, arg4 string) error {
+	fake.setStatusMutex.Lock()
+	ret, specificReturn := fake.setStatusReturnsOnCall[len(fake.setStatusArgsForCall)]
+	fake.setStatusArgsForCall = append(fake.setStatusArgsForCall, struct {
+		arg1 context.Context
+		arg2 string
+		arg3 storage.TxStatus
+		arg4 string
+	}{arg1, arg2, arg3, arg4})
+	stub := fake.SetStatusStub
+	fakeReturns := fake.setStatusReturns
+	fake.recordInvocation("SetStatus", []interface{}{arg1, arg2, arg3, arg4})
+	fake.setStatusMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2, arg3, arg4)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *Storage) SetStatusCallCount() int {
+	fake.setStatusMutex.RLock()
+	defer fake.setStatusMutex.RUnlock()
+	return len(fake.setStatusArgsForCall)
+}
+
+func (fake *Storage) SetStatusReturns(result1 error) {
+	fake.setStatusMutex.Lock()
+	defer fake.setStatusMutex.Unlock()
+	fake.SetStatusStub = nil
+	fake.setStatusReturns = struct {
+		result1 error
+	}{result1}
 }
 
 func (fake *Storage) AcquireRecoveryLeadership(arg1 context.Context, arg2 int64) (recovery.Leadership, bool, error) {
