@@ -23,6 +23,7 @@ import (
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/logging"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/storage"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/utils"
+	"golang.org/x/sync/singleflight"
 	"gopkg.in/yaml.v2"
 )
 
@@ -180,10 +181,16 @@ type LocalMembership struct {
 	// pass against a non-local label re-takes the write lock and reloads
 	// stored identity configurations from PG; on a busy auditor that
 	// serialises every audit on a single mutex.
-	localIdentitiesNegative   map[string]struct{}
-	targetIdentities          []view.Identity // optional list of identities to prefer
-	anonymous                 bool            // when true, only anonymous identities are considered selectable by default
-	closeOnce                 sync.Once
+	localIdentitiesNegative map[string]struct{}
+	// Collapses concurrent cache misses on the same label into a single
+	// PG round-trip + register pass. Without this, N concurrent audits
+	// of the same unknown identity each took the write lock and re-ran
+	// storedIdentityConfigurations + register; under c=600 stress the
+	// resulting contention dominated av_approve latency.
+	refreshGroup singleflight.Group
+	targetIdentities []view.Identity // optional list of identities to prefer
+	anonymous        bool            // when true, only anonymous identities are considered selectable by default
+	closeOnce        sync.Once
 }
 
 // NewLocalMembership creates a new LocalMembership instance.
@@ -770,28 +777,64 @@ func (l *LocalMembership) refreshAndGet(ctx context.Context, label string) *Loca
 	}
 	l.localIdentitiesMutex.RUnlock()
 
-	// Slow path: load + register requires the write lock.
-	l.localIdentitiesMutex.Lock()
-	defer l.localIdentitiesMutex.Unlock()
+	// Collapse concurrent misses on the same label. The Do callback runs
+	// the PG round-trip without holding the write lock, then takes the
+	// write lock only for the map mutations. This prevents N concurrent
+	// audit goroutines from each serialising a full PG load behind the
+	// write lock.
+	result, _, _ := l.refreshGroup.Do(label, func() (interface{}, error) {
+		return l.refreshAndGetUncoalesced(ctx, label), nil
+	})
+	if result == nil {
+		return nil
+	}
+	return result.(*LocalIdentity)
+}
 
-	// Double check (another writer may have populated while we waited).
-	identities, ok := l.localIdentitiesByName[label]
-	if ok {
+// refreshAndGetUncoalesced runs the slow path for a single label. It is
+// invoked under singleflight, so at most one goroutine per label runs it
+// concurrently; siblings observe its outcome via the shared singleflight
+// result. The PG round-trip is performed without holding the write lock so
+// other refreshes for different labels proceed in parallel.
+func (l *LocalMembership) refreshAndGetUncoalesced(ctx context.Context, label string) *LocalIdentity {
+	// Re-check under RLock — another singleflight winner for a different
+	// label may have populated this entry while we were queued.
+	l.localIdentitiesMutex.RLock()
+	if identities, ok := l.localIdentitiesByName[label]; ok {
+		l.localIdentitiesMutex.RUnlock()
 		return identities[0].Identity
 	}
-	mapped, ok := l.localIdentitiesByIdentity[label]
-	if ok {
+	if mapped, ok := l.localIdentitiesByIdentity[label]; ok {
+		l.localIdentitiesMutex.RUnlock()
 		return mapped
 	}
 	if _, ok := l.localIdentitiesNegative[label]; ok {
+		l.localIdentitiesMutex.RUnlock()
 		return nil
 	}
+	l.localIdentitiesMutex.RUnlock()
 
 	l.logger.DebugfContext(ctx, "refresh and get local identity for label [%s]", utils.Hashable(label))
+	// PG query runs without holding the write lock so other readers and
+	// other-label refreshes are not blocked behind it.
 	storedIdentityConfigurations, err := l.storedIdentityConfigurations(ctx)
 	if err != nil {
 		l.logger.ErrorfContext(ctx, "failed to load stored identity configurations: %s", err)
+		return nil
+	}
 
+	l.localIdentitiesMutex.Lock()
+	defer l.localIdentitiesMutex.Unlock()
+
+	// Double check under write lock — concurrent registrations from
+	// other code paths (e.g. handleConfig) may have populated this label.
+	if identities, ok := l.localIdentitiesByName[label]; ok {
+		return identities[0].Identity
+	}
+	if mapped, ok := l.localIdentitiesByIdentity[label]; ok {
+		return mapped
+	}
+	if _, ok := l.localIdentitiesNegative[label]; ok {
 		return nil
 	}
 
@@ -808,12 +851,10 @@ func (l *LocalMembership) refreshAndGet(ctx context.Context, label string) *Loca
 	}
 
 	// check again
-	identities, ok = l.localIdentitiesByName[label]
-	if ok {
+	if identities, ok := l.localIdentitiesByName[label]; ok {
 		return identities[0].Identity
 	}
-	mapped, ok = l.localIdentitiesByIdentity[label]
-	if ok {
+	if mapped, ok := l.localIdentitiesByIdentity[label]; ok {
 		return mapped
 	}
 
