@@ -388,12 +388,15 @@ func (m *Manager) recoverTransaction(ctx context.Context, txID string, storedAt 
 // the network/fabric finality wrappers into its dependency surface; upstream
 // wraps these statuses with errors.Wrapf so the substrings survive.
 //
-// Patterns covered:
+// Patterns covered (each is unique to a tx-not-found context in this repo):
 //   - "code = NotFound"            — raw gRPC status text
 //   - "not found in index"         — committer-side index miss
-//   - "TXID [...] not available"   — fabric finality deliveryflm wrapper
+//   - "] not available"            — fabric finality wrapper format
+//     "TXID [<txID>] not available"; anchored on "] not" so loose
+//     phrases like "Is [...] final? not available yet, wait" or
+//     "TokenManagerService not available" do not false-match
 //   - "no such transaction ID"     — fabric finality alternative wrapper
-//     (see network/fabric/finality/deliveryflm.go)
+//     (both originate at network/fabric/finality/deliveryflm.go)
 func isNotFoundError(err error) bool {
 	if err == nil {
 		return false
@@ -404,7 +407,7 @@ func isNotFoundError(err error) bool {
 		return true
 	case strings.Contains(msg, "not found in index"):
 		return true
-	case strings.Contains(msg, "not available"):
+	case strings.Contains(msg, "] not available"):
 		return true
 	case strings.Contains(msg, "no such transaction ID"):
 		return true
