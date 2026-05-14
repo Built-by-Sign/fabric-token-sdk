@@ -11,6 +11,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/hyperledger-labs/fabric-smart-client/pkg/utils/errors"
 	"github.com/hyperledger-labs/fabric-smart-client/platform/common/utils/collections/iterators"
@@ -23,6 +25,8 @@ import (
 	tokensdriver "github.com/hyperledger-labs/fabric-token-sdk/token/services/storage/db/driver"
 	sqlcommon "github.com/hyperledger-labs/fabric-token-sdk/token/services/storage/db/sql/common"
 )
+
+const auditDBSynchronousCommitEnv = "CBDC_AUDITDB_SYNCHRONOUS_COMMIT"
 
 // AuditTransactionStore wraps common.TransactionStore to add advisory lock to schema creation
 type AuditTransactionStore struct {
@@ -41,6 +45,40 @@ func (s *AuditTransactionStore) GetSchema() string {
 // CreateSchema overrides the base CreateSchema to ensure GetSchema is called on the correct receiver
 func (s *AuditTransactionStore) CreateSchema() error {
 	return common.InitSchema(s.writeDB, s.GetSchema())
+}
+
+// NewTransactionStoreTransaction opens an auditdb transaction. When
+// CBDC_AUDITDB_SYNCHRONOUS_COMMIT is set, the value is applied with SET LOCAL
+// for this transaction only. The default empty value keeps PostgreSQL's normal
+// synchronous_commit behavior.
+func (s *AuditTransactionStore) NewTransactionStoreTransaction() (tokensdriver.TransactionStoreTransaction, error) {
+	w, err := s.TransactionStore.NewTransactionStoreTransaction()
+	if err != nil {
+		return nil, err
+	}
+
+	mode := strings.ToLower(strings.TrimSpace(os.Getenv(auditDBSynchronousCommitEnv)))
+	if mode == "" {
+		return w, nil
+	}
+	switch mode {
+	case "on", "off", "local", "remote_write", "remote_apply":
+	default:
+		w.Rollback()
+		return nil, errors.Errorf("invalid %s value %q", auditDBSynchronousCommitEnv, mode)
+	}
+
+	tx, ok := w.Impl().(*sql.Tx)
+	if !ok {
+		w.Rollback()
+		return nil, errors.Errorf("auditdb postgres transaction has unexpected impl %T", w.Impl())
+	}
+	if _, err := tx.Exec("SET LOCAL synchronous_commit = " + mode); err != nil {
+		w.Rollback()
+		return nil, errors.Wrapf(err, "failed setting synchronous_commit=%s for auditdb transaction", mode)
+	}
+
+	return w, nil
 }
 
 // TransactionStore extends the common TransactionStore with PostgreSQL-specific atomic claim operations.

@@ -140,22 +140,67 @@ func (a *Service) Audit(ctx context.Context, tx Transaction) (*token.InputStream
 // Append adds the passed transaction to the auditor database.
 // It also releases the locks acquired by Audit.
 func (a *Service) Append(ctx context.Context, tx Transaction) error {
+	return a.append(ctx, tx, nil)
+}
+
+// AppendRecord adds the passed precomputed audit record to the auditor database.
+// It also releases the locks acquired by Audit.
+func (a *Service) AppendRecord(ctx context.Context, tx Transaction, record *token.AuditRecord) error {
+	return a.append(ctx, tx, record)
+}
+
+func (a *Service) append(ctx context.Context, tx Transaction, record *token.AuditRecord) error {
 	start := time.Now()
 	defer func() { a.metrics.AppendDuration.Observe(time.Since(start).Seconds()) }()
-	defer a.Release(ctx, tx)
+	released := false
+	defer func() {
+		if !released {
+			a.Release(ctx, tx)
+		}
+	}()
 
 	tms, err := a.tmsProvider.TokenManagementService(token.WithTMSID(a.tmsID))
 	if err != nil {
 		return err
 	}
 	// append request to audit db
-	if err := a.auditDB.Append(ctx, newRequestWrapper(tx.Request(), tms)); err != nil {
+	req := newRequestWrapper(tx.Request(), tms)
+	if record != nil {
+		if err := auditdb.RunPhase(ctx, "av_append_complete_inputs", func(ctx context.Context) error {
+			return req.completeInputsWithEmptyEID(ctx, record)
+		}); err != nil {
+			a.metrics.AppendErrors.Add(1)
+
+			return errors.WithMessagef(err, "failed filling gaps for request %s", tx.ID())
+		}
+		err = a.auditDB.AppendRecord(ctx, req, record)
+	} else {
+		err = a.auditDB.Append(ctx, req)
+	}
+	if err != nil {
 		a.metrics.AppendErrors.Add(1)
 
 		return errors.WithMessagef(err, "failed appending request %s", tx.ID())
 	}
+	a.Release(ctx, tx)
+	released = true
 
-	// lister to events
+	if err := a.registerFinalityListener(ctx, tx); err != nil {
+		return err
+	}
+	logger.DebugfContext(ctx, "append done for request [%s]", tx.ID())
+
+	return nil
+}
+
+func (a *Service) registerFinalityListener(ctx context.Context, tx Transaction) error {
+	return auditdb.RunPhase(ctx, "av_append_listener", func(ctx context.Context) error {
+		return a.registerFinalityListenerWithoutPhase(ctx, tx)
+	})
+}
+
+func (a *Service) registerFinalityListenerWithoutPhase(ctx context.Context, tx Transaction) error {
+	// listen to events
 	net, err := a.networkProvider.GetNetwork(tx.Network(), tx.Channel())
 	if err != nil {
 		return errors.WithMessagef(err, "failed getting network instance for [%s:%s]", tx.Network(), tx.Channel())
@@ -174,7 +219,6 @@ func (a *Service) Append(ctx context.Context, tx Transaction) error {
 	if err := net.AddFinalityListener(tx.Namespace(), tx.ID(), r); err != nil {
 		return errors.WithMessagef(err, "failed listening to network [%s:%s]", tx.Network(), tx.Channel())
 	}
-	logger.DebugfContext(ctx, "append done for request [%s]", tx.ID())
 
 	return nil
 }

@@ -149,55 +149,110 @@ func (d *StoreService) NewTransaction() (dbdriver.TransactionStoreTransaction, e
 func (d *StoreService) Append(ctx context.Context, req tokenRequest) error {
 	logger.DebugfContext(ctx, "appending new record... [%s]", req)
 
-	record, err := req.AuditRecord(ctx)
-	if err != nil {
-		return errors.WithMessagef(err, "failed getting audit records for request [%s]", req)
+	var record *token.AuditRecord
+	if err := RunPhase(ctx, "av_append_audit_record", func(ctx context.Context) error {
+		var err error
+		record, err = req.AuditRecord(ctx)
+		if err != nil {
+			return errors.WithMessagef(err, "failed getting audit records for request [%s]", req)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	return d.AppendRecord(ctx, req, record)
+}
+
+// AppendRecord appends records using a precomputed audit record.
+func (d *StoreService) AppendRecord(ctx context.Context, req tokenRequest, record *token.AuditRecord) error {
+	if record == nil {
+		return errors.Errorf("missing audit record for request [%s]", req)
 	}
 
 	logger.DebugfContext(ctx, "parsing new audit record... [%d] in, [%d] out", record.Inputs.Count(), record.Outputs.Count())
 	now := time.Now().UTC()
-	raw, err := req.Bytes()
-	if err != nil {
-		return errors.Wrapf(err, "failed to marshal token request [%s]", req)
+
+	var raw []byte
+	if err := RunPhase(ctx, "av_append_request_bytes", func(ctx context.Context) error {
+		var err error
+		raw, err = req.Bytes()
+		if err != nil {
+			return errors.Wrapf(err, "failed to marshal token request [%s]", req)
+		}
+		return nil
+	}); err != nil {
+		return err
 	}
-	mov, err := ttxdb.Movements(ctx, record, now)
-	if err != nil {
-		return errors.WithMessagef(err, "failed parsing movements from audit record")
+
+	var mov []dbdriver.MovementRecord
+	if err := RunPhase(ctx, "av_append_movements", func(ctx context.Context) error {
+		var err error
+		mov, err = ttxdb.Movements(ctx, record, now)
+		if err != nil {
+			return errors.WithMessagef(err, "failed parsing movements from audit record")
+		}
+		return nil
+	}); err != nil {
+		return err
 	}
-	txs, err := ttxdb.TransactionRecords(ctx, record, now)
-	if err != nil {
-		return errors.WithMessagef(err, "failed parsing transactions from audit record")
+
+	var txs []dbdriver.TransactionRecord
+	if err := RunPhase(ctx, "av_append_transactions", func(ctx context.Context) error {
+		var err error
+		txs, err = ttxdb.TransactionRecords(ctx, record, now)
+		if err != nil {
+			return errors.WithMessagef(err, "failed parsing transactions from audit record")
+		}
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	logger.DebugfContext(ctx, "storing new records... [%d,%d,%d]", len(raw), len(mov), len(txs))
-	w, err := d.db.NewTransactionStoreTransaction()
-	if err != nil {
-		return errors.WithMessagef(err, "begin update for txid [%s] failed", record.Anchor)
+	var w dbdriver.TransactionStoreTransaction
+	if err := RunPhase(ctx, "av_append_db_begin", func(context.Context) error {
+		var err error
+		w, err = d.db.NewTransactionStoreTransaction()
+		if err != nil {
+			return errors.WithMessagef(err, "begin update for txid [%s] failed", record.Anchor)
+		}
+		return nil
+	}); err != nil {
+		return err
 	}
-	if err := w.AddTokenRequest(
-		ctx,
-		string(record.Anchor),
-		raw,
-		req.AllApplicationMetadata(),
-		record.Attributes,
-		req.PublicParamsHash(),
-	); err != nil {
+	if err := RunPhase(ctx, "av_append_db_request", func(ctx context.Context) error {
+		return w.AddTokenRequest(
+			ctx,
+			string(record.Anchor),
+			raw,
+			req.AllApplicationMetadata(),
+			record.Attributes,
+			req.PublicParamsHash(),
+		)
+	}); err != nil {
 		w.Rollback()
 
 		return errors.WithMessagef(err, "append token request for txid [%s] failed", record.Anchor)
 	}
-	if err := w.AddMovement(ctx, mov...); err != nil {
+	if err := RunPhase(ctx, "av_append_db_movement", func(ctx context.Context) error {
+		return w.AddMovement(ctx, mov...)
+	}); err != nil {
 		w.Rollback()
 
 		return errors.WithMessagef(err, "append sent movements for txid [%s] failed", record.Anchor)
 	}
 
-	if err := w.AddTransaction(ctx, txs...); err != nil {
+	if err := RunPhase(ctx, "av_append_db_transaction", func(ctx context.Context) error {
+		return w.AddTransaction(ctx, txs...)
+	}); err != nil {
 		w.Rollback()
 
 		return errors.WithMessagef(err, "append transactions for txid [%s] failed", record.Anchor)
 	}
-	if err := w.Commit(); err != nil {
+	if err := RunPhase(ctx, "av_append_db_commit", func(context.Context) error {
+		return w.Commit()
+	}); err != nil {
 		return errors.WithMessagef(err, "committing tx for txid [%s] failed", record.Anchor)
 	}
 
