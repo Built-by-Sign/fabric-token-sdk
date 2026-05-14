@@ -388,15 +388,18 @@ func (m *Manager) recoverTransaction(ctx context.Context, txID string, storedAt 
 // the network/fabric finality wrappers into its dependency surface; upstream
 // wraps these statuses with errors.Wrapf so the substrings survive.
 //
-// Patterns covered (each is unique to a tx-not-found context in this repo):
-//   - "code = NotFound"            — raw gRPC status text
-//   - "not found in index"         — committer-side index miss
-//   - "] not available"            — fabric finality wrapper format
-//     "TXID [<txID>] not available"; anchored on "] not" so loose
-//     phrases like "Is [...] final? not available yet, wait" or
-//     "TokenManagerService not available" do not false-match
-//   - "no such transaction ID"     — fabric finality alternative wrapper
-//     (both originate at network/fabric/finality/deliveryflm.go)
+// Patterns covered (verified against the dev environment runtime error
+//
+//	"rpc error: code = NotFound desc = transaction ID [X]: not found in
+//	  index: tx not found"):
+//
+//   - "code = NotFound"     — raw gRPC status text
+//   - "not found in index"  — committer's gRPC status desc field
+//   - "tx not found"        — FSC finality.TxNotFound sentinel appended
+//     by fabric-x ledger.GetTransactionByID
+//     (fabric-smart-client/platform/fabricx/core/ledger/ledger.go:64).
+//     Stable across committer error format changes since the sentinel
+//     is wrapped at the FSC layer, above the committer's gRPC text.
 func isNotFoundError(err error) bool {
 	if err == nil {
 		return false
@@ -407,9 +410,7 @@ func isNotFoundError(err error) bool {
 		return true
 	case strings.Contains(msg, "not found in index"):
 		return true
-	case strings.Contains(msg, "] not available"):
-		return true
-	case strings.Contains(msg, "no such transaction ID"):
+	case strings.Contains(msg, "tx not found"):
 		return true
 	}
 	return false
