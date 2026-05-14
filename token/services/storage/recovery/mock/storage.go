@@ -105,11 +105,38 @@ func (fake *Storage) SetStatusCallCount() int {
 	return len(fake.setStatusArgsForCall)
 }
 
+func (fake *Storage) SetStatusCalls(stub func(context.Context, string, storage.TxStatus, string) error) {
+	fake.setStatusMutex.Lock()
+	defer fake.setStatusMutex.Unlock()
+	fake.SetStatusStub = stub
+}
+
+func (fake *Storage) SetStatusArgsForCall(i int) (context.Context, string, storage.TxStatus, string) {
+	fake.setStatusMutex.RLock()
+	defer fake.setStatusMutex.RUnlock()
+	argsForCall := fake.setStatusArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3, argsForCall.arg4
+}
+
 func (fake *Storage) SetStatusReturns(result1 error) {
 	fake.setStatusMutex.Lock()
 	defer fake.setStatusMutex.Unlock()
 	fake.SetStatusStub = nil
 	fake.setStatusReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *Storage) SetStatusReturnsOnCall(i int, result1 error) {
+	fake.setStatusMutex.Lock()
+	defer fake.setStatusMutex.Unlock()
+	fake.SetStatusStub = nil
+	if fake.setStatusReturnsOnCall == nil {
+		fake.setStatusReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.setStatusReturnsOnCall[i] = struct {
 		result1 error
 	}{result1}
 }

@@ -244,11 +244,23 @@ func (m *Manager) recoverTransactions(ctx context.Context) error {
 		go m.worker(ctx, &workerWG, work, errCh)
 	}
 
+	// ClaimPendingTransactions returns one TransactionRecord per ledger
+	// transaction row, and a single txID can produce multiple rows (one per
+	// movement/output). Dedupe by TxID before fanning out so two workers do
+	// not concurrently call Recover/SetStatus/ReleaseRecoveryClaim against
+	// the same transaction. Keep the earliest StoredAt to make the grace
+	// period decision use the row's true age.
+	seen := make(map[string]time.Time, len(records))
 	for _, record := range records {
 		if record == nil {
 			continue
 		}
-		work <- pendingTx{TxID: record.TxID, StoredAt: record.Timestamp}
+		if prev, ok := seen[record.TxID]; !ok || record.Timestamp.Before(prev) {
+			seen[record.TxID] = record.Timestamp
+		}
+	}
+	for txID, storedAt := range seen {
+		work <- pendingTx{TxID: txID, StoredAt: storedAt}
 	}
 	close(work)
 
@@ -319,8 +331,15 @@ func (m *Manager) recoverTransaction(ctx context.Context, txID string, storedAt 
 	// Attempt recovery using the injected handler
 	err := m.handler.Recover(ctx, txID)
 
+	// Residual race: SetStatus is unconditional, so an independent finality
+	// listener that confirms this tx between our claim and the write below
+	// could be overwritten by Deleted. In practice the NotFoundGracePeriod
+	// (default 30 min) makes this window vanishingly small — we only get
+	// here when the tx has been Pending for grace+ AND Recover just returned
+	// NotFound. Future hardening: replace SetStatus with an atomic
+	// "status=Pending → Deleted" CAS at the SQL layer.
 	markedDeleted := false
-	if err != nil && m.config.NotFoundGracePeriod > 0 && isNotFoundError(err) {
+	if err != nil && m.config.NotFoundGracePeriod > 0 && !storedAt.IsZero() && isNotFoundError(err) {
 		age := time.Since(storedAt)
 		if age > m.config.NotFoundGracePeriod {
 			deleteMsg := fmt.Sprintf("tx never reached ledger (NotFound after %v, grace=%v)", age.Truncate(time.Second), m.config.NotFoundGracePeriod)
@@ -363,16 +382,34 @@ func (m *Manager) recoverTransaction(ctx context.Context, txID string, storedAt 
 	return nil
 }
 
-// isNotFoundError reports whether err looks like a gRPC NotFound from the
-// transaction-status query path. Matching by string is intentionally loose so
-// the recovery loop does not pull grpc/codes into its dependency surface; the
-// upstream wraps the gRPC status with errors.Wrapf so the substring survives.
+// isNotFoundError reports whether err looks like a "transaction not found on
+// ledger" failure surfaced from the recovery handler path. Matching by string
+// is intentionally loose so the recovery loop does not pull grpc/codes or
+// the network/fabric finality wrappers into its dependency surface; upstream
+// wraps these statuses with errors.Wrapf so the substrings survive.
+//
+// Patterns covered:
+//   - "code = NotFound"            — raw gRPC status text
+//   - "not found in index"         — committer-side index miss
+//   - "TXID [...] not available"   — fabric finality deliveryflm wrapper
+//   - "no such transaction ID"     — fabric finality alternative wrapper
+//     (see network/fabric/finality/deliveryflm.go)
 func isNotFoundError(err error) bool {
 	if err == nil {
 		return false
 	}
 	msg := err.Error()
-	return strings.Contains(msg, "code = NotFound") || strings.Contains(msg, "not found in index")
+	switch {
+	case strings.Contains(msg, "code = NotFound"):
+		return true
+	case strings.Contains(msg, "not found in index"):
+		return true
+	case strings.Contains(msg, "not available"):
+		return true
+	case strings.Contains(msg, "no such transaction ID"):
+		return true
+	}
+	return false
 }
 
 func (m *Manager) releaseClaim(ctx context.Context, txID string, message string) error {

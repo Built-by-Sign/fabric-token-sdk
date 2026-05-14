@@ -96,7 +96,11 @@ func LoadConfig(cfg *config.Configuration) (Config, error) {
 	if config.InstanceID != "" {
 		result.InstanceID = config.InstanceID
 	}
-	if config.NotFoundGracePeriod > 0 {
+	// NotFoundGracePeriod accepts an explicit zero to disable the orphan
+	// promotion, so check IsSet rather than the Go zero value. Without this
+	// gate, setting notFoundGracePeriod: 0 in config would silently fall back
+	// to the 30 min default and the documented opt-out would be unreachable.
+	if cfg.IsSet(ConfigKeyRecovery + ".notFoundGracePeriod") {
 		result.NotFoundGracePeriod = config.NotFoundGracePeriod
 	}
 
