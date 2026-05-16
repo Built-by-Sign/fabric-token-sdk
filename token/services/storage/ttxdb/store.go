@@ -227,7 +227,9 @@ func (d *StoreService) ValidationRecords(ctx context.Context, params QueryValida
 func (d *StoreService) AppendTransactionRecord(ctx context.Context, req *token.Request) error {
 	logger.DebugfContext(ctx, "appending new transaction record... [%s]", req.Anchor)
 
+	inputsOutputsStart := time.Now()
 	ins, outs, attrs, err := req.InputsAndOutputs(ctx)
+	recordPhase(ctx, "cls_store_inputs_outputs", inputsOutputsStart)
 	if err != nil {
 		return errors.WithMessagef(err, "failed getting inputs and outputs for request [%s]", req.Anchor)
 	}
@@ -238,11 +240,15 @@ func (d *StoreService) AppendTransactionRecord(ctx context.Context, req *token.R
 		Attributes: attrs,
 	}
 
+	reqBytesStart := time.Now()
 	raw, err := req.Bytes()
+	recordPhase(ctx, "cls_store_req_bytes", reqBytesStart)
 	if err != nil {
 		return errors.Wrapf(err, "failed to marshal token request [%s]", req.Anchor)
 	}
+	txRecordsStart := time.Now()
 	txs, err := TransactionRecords(ctx, record, time.Now().UTC())
+	recordPhase(ctx, "cls_store_tx_records", txRecordsStart)
 	if err != nil {
 		return errors.WithMessagef(err, "failed parsing transactions from audit record")
 	}
@@ -253,6 +259,7 @@ func (d *StoreService) AppendTransactionRecord(ctx context.Context, req *token.R
 		return errors.WithMessagef(err, "begin update for txid [%s] failed", record.Anchor)
 	}
 	anchor := string(record.Anchor)
+	addRequestStart := time.Now()
 	if err := w.AddTokenRequest(
 		ctx,
 		anchor,
@@ -265,6 +272,8 @@ func (d *StoreService) AppendTransactionRecord(ctx context.Context, req *token.R
 
 		return errors.WithMessagef(err, "append token request for txid [%s] failed", record.Anchor)
 	}
+	recordPhase(ctx, "cls_store_add_request", addRequestStart)
+	addTxStart := time.Now()
 	for _, tx := range txs {
 		if err := w.AddTransaction(ctx, tx); err != nil {
 			w.Rollback()
@@ -272,9 +281,12 @@ func (d *StoreService) AppendTransactionRecord(ctx context.Context, req *token.R
 			return errors.WithMessagef(err, "append transactions for txid [%s] failed", record.Anchor)
 		}
 	}
+	recordPhase(ctx, "cls_store_add_tx", addTxStart)
+	commitStart := time.Now()
 	if err := w.Commit(); err != nil {
 		return errors.WithMessagef(err, "committing tx for txid [%s] failed", record.Anchor)
 	}
+	recordPhase(ctx, "cls_store_commit", commitStart)
 
 	logger.DebugfContext(ctx, "appending transaction record new completed without errors")
 

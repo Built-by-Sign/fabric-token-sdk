@@ -370,7 +370,16 @@ func (r *Request) Transfer(ctx context.Context, wallet *OwnerWallet, typ token.T
 	if err != nil {
 		return nil, errors.WithMessagef(err, "failed compiling options [%v]", opts)
 	}
+	rec := opt.PhaseRecorder
+	recordPhase := func(phase string, start time.Time) {
+		if rec != nil {
+			rec(ctx, phase, time.Since(start))
+		}
+	}
+
+	prepareStart := time.Now()
 	tokenIDs, outputTokens, err := r.prepareTransfer(ctx, false, wallet, typ, values, owners, opt)
+	recordPhase("req_prepare_transfer", prepareStart)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed preparing transfer")
 	}
@@ -380,6 +389,7 @@ func (r *Request) Transfer(ctx context.Context, wallet *OwnerWallet, typ token.T
 	ts := r.TokenService.tms.TransferService()
 
 	// Compute transfer
+	computeStart := time.Now()
 	transfer, transferMetadata, err := ts.Transfer(
 		ctx,
 		r.Anchor,
@@ -390,6 +400,7 @@ func (r *Request) Transfer(ctx context.Context, wallet *OwnerWallet, typ token.T
 			Attributes: opt.Attributes,
 		},
 	)
+	recordPhase("req_compute_transfer", computeStart)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed creating transfer action")
 	}
@@ -401,7 +412,9 @@ func (r *Request) Transfer(ctx context.Context, wallet *OwnerWallet, typ token.T
 	}
 
 	// Append
+	serializeStart := time.Now()
 	raw, err := transfer.Serialize()
+	recordPhase("req_serialize", serializeStart)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed serializing transfer action")
 	}

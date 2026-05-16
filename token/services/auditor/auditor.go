@@ -201,22 +201,35 @@ func (a *Service) AppendRecord(ctx context.Context, tx Transaction, _ *token.Aud
 // for the passed enrollment ids. When tokenTypes is non-empty, only those
 // types are summed; otherwise every type is included.
 //
-// Reapplied stub: the original fork used a single batch GROUP BY query.
-// This stub falls back to per-EID HoldingsFilter, which is correct but
-// issues one query per EID. Optimization is tracked in obsidian
+// Implementation: builds a single HoldingsFilter with all EIDs, executes
+// one PG query (WHERE enrollment_id IN (...)), and aggregates per-EID in
+// Go. EIDs with no matching movement get a zero balance. See obsidian
 // "CBDC 压测优化迭代 2026-05-13" §8.1.
 func (a *Service) SumHoldingsByEnrollmentID(ctx context.Context, eids []string, tokenTypes []token2.Type) (map[string]*big.Int, error) {
+	if len(eids) == 0 {
+		return map[string]*big.Int{}, nil
+	}
+
+	f := a.auditDB.NewHoldingsFilter()
+	for _, eid := range eids {
+		f = f.ByEnrollmentId(eid)
+	}
+	for _, tt := range tokenTypes {
+		f = f.ByType(tt)
+	}
+	executed, err := f.Execute(ctx)
+	if err != nil {
+		return nil, errors.WithMessagef(err, "holdings query for %d enrollment IDs failed", len(eids))
+	}
+
+	partitioned := executed.SumByEnrollmentID()
 	result := make(map[string]*big.Int, len(eids))
 	for _, eid := range eids {
-		f := a.auditDB.NewHoldingsFilter().ByEnrollmentId(eid)
-		for _, tt := range tokenTypes {
-			f = f.ByType(tt)
+		if b, ok := partitioned[eid]; ok {
+			result[eid] = b
+		} else {
+			result[eid] = big.NewInt(0)
 		}
-		executed, err := f.Execute(ctx)
-		if err != nil {
-			return nil, errors.WithMessagef(err, "holdings query for [%s] failed", eid)
-		}
-		result[eid] = executed.Sum()
 	}
 	return result, nil
 }

@@ -60,6 +60,16 @@ type CollectEndorsementsView struct {
 	sessions map[string]view.Session
 }
 
+// recordPhase invokes Opts.PhaseRecorder for the given phase if non-nil.
+// Hides the nil check at every instrumentation site and lets callers
+// write `c.recordPhase(ctx, "cls_sig_issues", start)`.
+func (c *CollectEndorsementsView) recordPhase(ctx context.Context, phase string, start time.Time) {
+	if c.Opts == nil || c.Opts.PhaseRecorder == nil {
+		return
+	}
+	c.Opts.PhaseRecorder(ctx, phase, time.Since(start))
+}
+
 // NewCollectEndorsementsView returns an instance of the CollectEndorsementsView struct.
 // This view does the following:
 // 1. It collects all the required signatures
@@ -95,12 +105,16 @@ func (c *CollectEndorsementsView) Call(context view.Context) (interface{}, error
 	defer c.CleanupExternalWallets(context, externalWallets)
 
 	// 1. First collect signatures on the token request
+	issueStart := time.Now()
 	issueSigmas, err := c.requestSignaturesOnIssues(context, externalWallets)
+	c.recordPhase(context.Context(), "cls_sig_issues", issueStart)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "failed requesting signatures on issues")
 	}
 
+	transferStart := time.Now()
 	transferSigmas, err := c.requestSignaturesOnTransfers(context, externalWallets)
+	c.recordPhase(context.Context(), "cls_sig_transfers", transferStart)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "failed requesting signatures on transfers")
 	}
@@ -121,7 +135,9 @@ func (c *CollectEndorsementsView) Call(context view.Context) (interface{}, error
 	// 3. Endorse and return the transaction envelope
 	if !c.Opts.SkipApproval {
 		logger.DebugfContext(context.Context(), "Request approval from endorser")
+		approvalStart := time.Now()
 		_, err = c.requestApproval(context)
+		c.recordPhase(context.Context(), "cls_request_approval", approvalStart)
 		if err != nil {
 			return nil, errors.WithMessagef(err, "failed requesting approval")
 		}
@@ -581,6 +597,7 @@ func (c *CollectEndorsementsView) prepareDistributionList(context view.Context, 
 	// Compress distributionList by removing duplicates
 
 	// check if there are multisig identities, if yes, unwrap them
+	unwrapStart := time.Now()
 	allIds := make([]view.Identity, 0, len(distributionList)+len(auditors))
 	for _, id := range distributionList {
 		if id.IsNone() {
@@ -613,21 +630,28 @@ func (c *CollectEndorsementsView) prepareDistributionList(context view.Context, 
 	}
 	distributionList = allIds
 	allIds = append(allIds, auditors...)
+	c.recordPhase(context.Context(), "prep_unwrap", unwrapStart)
 
 	sigService, err := sig.GetService(context)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed getting sig service for [%s]", c.tx.Opts.Auditor)
 	}
+	aremeGlobalStart := time.Now()
 	mine := collections.NewSet(sigService.AreMe(context.Context(), allIds...)...)
+	c.recordPhase(context.Context(), "prep_areme_global", aremeGlobalStart)
 	remainingIds := make([]view.Identity, 0, len(allIds)-mine.Length())
 	for _, id := range allIds {
 		if !mine.Contains(id.UniqueID()) {
 			remainingIds = append(remainingIds, id)
 		}
 	}
+	aremeTmsStart := time.Now()
 	mine.Add(c.tx.TokenService().SigService().AreMe(context.Context(), remainingIds...)...)
+	c.recordPhase(context.Context(), "prep_areme_tms", aremeTmsStart)
 	logger.DebugfContext(context.Context(), "%d/%d ids were mine", mine.Length(), len(allIds))
 
+	partyLoopStart := time.Now()
+	defer c.recordPhase(context.Context(), "prep_party_loop", partyLoopStart)
 	var distributionListCompressed []distributionListEntry
 	for _, party := range distributionList {
 		// For each party in the distribution list:
