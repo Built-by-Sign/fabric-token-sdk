@@ -174,30 +174,31 @@ func (d *StoreService) Append(ctx context.Context, req tokenRequest) error {
 	if err != nil {
 		return errors.WithMessagef(err, "begin update for txid [%s] failed", record.Anchor)
 	}
-	if err := w.AddTokenRequest(
-		ctx,
-		string(record.Anchor),
-		raw,
-		req.AllApplicationMetadata(),
-		record.Attributes,
-		req.PublicParamsHash(),
-	); err != nil {
+	if err := runPhase(ctx, "av_append_db_request", func(c context.Context) error {
+		return w.AddTokenRequest(c, string(record.Anchor), raw, req.AllApplicationMetadata(), record.Attributes, req.PublicParamsHash())
+	}); err != nil {
 		w.Rollback()
 
 		return errors.WithMessagef(err, "append token request for txid [%s] failed", record.Anchor)
 	}
-	if err := w.AddMovement(ctx, mov...); err != nil {
+	if err := runPhase(ctx, "av_append_db_movement", func(c context.Context) error {
+		return w.AddMovement(c, mov...)
+	}); err != nil {
 		w.Rollback()
 
 		return errors.WithMessagef(err, "append sent movements for txid [%s] failed", record.Anchor)
 	}
 
-	if err := w.AddTransaction(ctx, txs...); err != nil {
+	if err := runPhase(ctx, "av_append_db_transaction", func(c context.Context) error {
+		return w.AddTransaction(c, txs...)
+	}); err != nil {
 		w.Rollback()
 
 		return errors.WithMessagef(err, "append transactions for txid [%s] failed", record.Anchor)
 	}
-	if err := w.Commit(); err != nil {
+	if err := runPhase(ctx, "av_append_db_commit", func(_ context.Context) error {
+		return w.Commit()
+	}); err != nil {
 		return errors.WithMessagef(err, "committing tx for txid [%s] failed", record.Anchor)
 	}
 

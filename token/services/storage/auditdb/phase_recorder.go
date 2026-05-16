@@ -31,3 +31,13 @@ func PhaseRecorderFrom(ctx context.Context) PhaseFn {
 	}
 	return nil
 }
+
+// runPhase invokes fn under the phase recorder attached to ctx, or fn
+// directly if no recorder is attached. Used by auditdb.StoreService.Append
+// to record per-insert sub-phases without making every call site nil-check.
+func runPhase(ctx context.Context, phaseName string, fn func(context.Context) error) error {
+	if rec := PhaseRecorderFrom(ctx); rec != nil {
+		return rec(ctx, phaseName, fn)
+	}
+	return fn(ctx)
+}

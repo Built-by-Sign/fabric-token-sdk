@@ -105,16 +105,19 @@ func (c *CollectEndorsementsView) Call(context view.Context) (interface{}, error
 	defer c.CleanupExternalWallets(context, externalWallets)
 
 	// 1. First collect signatures on the token request
-	issueStart := time.Now()
+	signaturesStart := time.Now()
+	issueStart := signaturesStart
 	issueSigmas, err := c.requestSignaturesOnIssues(context, externalWallets)
 	c.recordPhase(context.Context(), "cls_sig_issues", issueStart)
 	if err != nil {
+		c.recordPhase(context.Context(), "cls_signatures", signaturesStart)
 		return nil, errors.WithMessagef(err, "failed requesting signatures on issues")
 	}
 
 	transferStart := time.Now()
 	transferSigmas, err := c.requestSignaturesOnTransfers(context, externalWallets)
 	c.recordPhase(context.Context(), "cls_sig_transfers", transferStart)
+	c.recordPhase(context.Context(), "cls_signatures", signaturesStart)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "failed requesting signatures on transfers")
 	}
@@ -153,11 +156,14 @@ func (c *CollectEndorsementsView) Call(context view.Context) (interface{}, error
 
 	// Cleanup audit
 	logger.DebugfContext(context.Context(), "Cleanup audit")
+	cleanupStart := time.Now()
 	if err := c.cleanupAudit(context); err != nil {
+		c.recordPhase(context.Context(), "cls_cleanup", cleanupStart)
 		logger.ErrorfContext(context.Context(), "failed cleaning up audit: %s", err)
 
 		return nil, errors.WithMessagef(err, "failed cleaning up audit")
 	}
+	c.recordPhase(context.Context(), "cls_cleanup", cleanupStart)
 
 	logger.DebugfContext(context.Context(), "CollectEndorsementsView done.")
 
@@ -487,7 +493,9 @@ func (c *CollectEndorsementsView) distributeTxToParties(context view.Context, di
 	// Distribute the transaction to all parties in the distribution list.
 	// Filter the metadata by Enrollment ID.
 	// The auditor will receive the full set of metadata
+	prepDistStart := time.Now()
 	finalDistributionList, err := c.prepareDistributionList(context, auditors, distributionList)
+	c.recordPhase(context.Context(), "cls_prep_dist_list", prepDistStart)
 	if err != nil {
 		return errors.Wrap(err, "failed preparing distribution list")
 	}
@@ -496,11 +504,16 @@ func (c *CollectEndorsementsView) distributeTxToParties(context view.Context, di
 
 	// Store transaction in the token transaction database
 	logger.DebugfContext(context.Context(), "Store transaction records")
+	storeStart := time.Now()
 	if err := StoreTransactionRecords(context, c.tx); err != nil {
+		c.recordPhase(context.Context(), "cls_store_records", storeStart)
 		return errors.Wrapf(err, "failed adding transaction %s to the token transaction database", c.tx.ID())
 	}
+	c.recordPhase(context.Context(), "cls_store_records", storeStart)
 
 	logger.DebugfContext(context.Context(), "start distributing to %d parties", len(finalDistributionList))
+	distributeStart := time.Now()
+	defer c.recordPhase(context.Context(), "cls_distribute", distributeStart)
 	for i, entry := range finalDistributionList {
 		// If it is me, no need to open a remote connection. Just store the envelope locally.
 		if entry.IsMe && !entry.Auditor {
