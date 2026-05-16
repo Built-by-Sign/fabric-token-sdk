@@ -10,11 +10,13 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/hyperledger-labs/fabric-smart-client/pkg/utils/errors"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/logging"
+	"github.com/hyperledger-labs/fabric-token-sdk/token/services/storage"
 	dbdriver "github.com/hyperledger-labs/fabric-token-sdk/token/services/storage/db/driver"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/storage/ttxdb"
 )
@@ -33,6 +35,32 @@ type Storage interface {
 	AcquireRecoveryLeadership(ctx context.Context, lockID int64) (Leadership, bool, error)
 	ClaimPendingTransactions(ctx context.Context, olderThan time.Duration, leaseDuration time.Duration, limit int, owner string) ([]*ttxdb.TransactionRecord, error)
 	ReleaseRecoveryClaim(ctx context.Context, txID string, owner string, message string) error
+	// SetStatus promotes a transaction whose recovery keeps returning NotFound
+	// past the grace period to a final status (Deleted), preventing it from
+	// blocking the sweep queue forever. Added by fork PR #12 — without this,
+	// orphan tx_ids stayed Pending forever and tied up worker slots.
+	SetStatus(ctx context.Context, txID string, status storage.TxStatus, message string) error
+}
+
+// recoveryItem carries a single tx through the worker pool. StoredAt is
+// needed for the NotFoundGracePeriod check, so the work channel can no
+// longer be a bare chan string.
+type recoveryItem struct {
+	TxID     string
+	StoredAt time.Time
+}
+
+// isNotFoundError matches the error patterns we see when a tx_id is not
+// known to the orderer / committer side. Pattern set comes from dev log
+// inspection — obsidian "CBDC 压测优化迭代 2026-05-14" §3.3.
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "code = NotFound") ||
+		strings.Contains(msg, "not found in index") ||
+		strings.Contains(msg, "tx not found")
 }
 
 //go:generate counterfeiter -o mock/handler.go -fake-name Handler . Handler
@@ -229,7 +257,7 @@ func (m *Manager) recoverTransactions(ctx context.Context) error {
 
 	m.logger.Infof("claimed %d pending transaction(s) needing recovery", len(records))
 
-	work := make(chan string)
+	work := make(chan recoveryItem)
 	errCh := make(chan error, len(records))
 	var workerWG sync.WaitGroup
 
@@ -238,11 +266,20 @@ func (m *Manager) recoverTransactions(ctx context.Context) error {
 		go m.worker(ctx, &workerWG, work, errCh)
 	}
 
+	// seen dedups txIDs that appear multiple times in a single batch — e.g.
+	// the claim query returns the same tx multiple times when reads cross
+	// a lease-expiry boundary. Without this the same tx could be processed
+	// by two workers concurrently (obsidian 2026-05-14 §3.2 codex review #1).
+	seen := make(map[string]time.Time, len(records))
 	for _, record := range records {
 		if record == nil {
 			continue
 		}
-		work <- record.TxID
+		if _, dup := seen[record.TxID]; dup {
+			continue
+		}
+		seen[record.TxID] = record.Timestamp
+		work <- recoveryItem{TxID: record.TxID, StoredAt: record.Timestamp}
 	}
 	close(work)
 
@@ -272,18 +309,18 @@ func (m *Manager) recoverTransactions(ctx context.Context) error {
 	return firstErr
 }
 
-func (m *Manager) worker(ctx context.Context, wg *sync.WaitGroup, work <-chan string, errCh chan<- error) {
+func (m *Manager) worker(ctx context.Context, wg *sync.WaitGroup, work <-chan recoveryItem, errCh chan<- error) {
 	defer wg.Done()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case txID, ok := <-work:
+		case item, ok := <-work:
 			if !ok {
 				return
 			}
-			if err := m.recoverTransaction(ctx, txID); err != nil {
+			if err := m.recoverTransaction(ctx, item.TxID, item.StoredAt); err != nil {
 				errCh <- err
 			}
 		}
@@ -291,12 +328,39 @@ func (m *Manager) worker(ctx context.Context, wg *sync.WaitGroup, work <-chan st
 }
 
 // recoverTransaction attempts to recover a transaction using the injected handler
-// and always releases the claim with an appropriate message
-func (m *Manager) recoverTransaction(ctx context.Context, txID string) error {
+// and always releases the claim with an appropriate message.
+//
+// If the handler returns a NotFound-shaped error and the row's stored_at
+// is older than NotFoundGracePeriod, the transaction is promoted to
+// Deleted via storage.SetStatus so the queue can move past it instead
+// of re-claiming it forever. StoredAt zero values skip the promotion
+// (defensive: if the claim record didn't carry a timestamp, we can't
+// safely decide that enough time has passed — codex review #4, obsidian
+// 2026-05-14 §3.2).
+func (m *Manager) recoverTransaction(ctx context.Context, txID string, storedAt time.Time) error {
 	m.logger.Debugf("recovering transaction [%s]", txID)
 
 	// Attempt recovery using the injected handler
 	err := m.handler.Recover(ctx, txID)
+
+	// NotFound + past grace period → force-promote to Deleted to unblock
+	// the sweep queue. We promote BEFORE releasing the claim so the
+	// SetStatus is observed under the lease (avoids racing with a parallel
+	// committer-side late-arrival).
+	if err != nil &&
+		m.config.NotFoundGracePeriod > 0 &&
+		!storedAt.IsZero() &&
+		time.Since(storedAt) > m.config.NotFoundGracePeriod &&
+		isNotFoundError(err) {
+		setErr := m.storage.SetStatus(ctx, txID, storage.Deleted,
+			fmt.Sprintf("recovery: NotFound past grace period of %s", m.config.NotFoundGracePeriod))
+		if setErr != nil {
+			m.logger.Warnf("failed to promote orphan tx [%s] to Deleted: %v", txID, setErr)
+		} else {
+			m.logger.Infof("promoted orphan tx [%s] (stored_at=%s) to Deleted after %s NotFound",
+				txID, storedAt.Format(time.RFC3339), time.Since(storedAt).Round(time.Second))
+		}
+	}
 
 	// Always release the claim with appropriate message
 	var message string

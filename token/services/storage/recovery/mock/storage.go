@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hyperledger-labs/fabric-token-sdk/token/services/storage"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/storage/recovery"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/storage/ttxdb"
 )
@@ -56,6 +57,20 @@ type Storage struct {
 		result1 error
 	}
 	releaseRecoveryClaimReturnsOnCall map[int]struct {
+		result1 error
+	}
+	SetStatusStub        func(context.Context, string, storage.TxStatus, string) error
+	setStatusMutex       sync.RWMutex
+	setStatusArgsForCall []struct {
+		arg1 context.Context
+		arg2 string
+		arg3 storage.TxStatus
+		arg4 string
+	}
+	setStatusReturns struct {
+		result1 error
+	}
+	setStatusReturnsOnCall map[int]struct {
 		result1 error
 	}
 	invocations      map[string][][]interface{}
@@ -258,6 +273,70 @@ func (fake *Storage) ReleaseRecoveryClaimReturnsOnCall(i int, result1 error) {
 		})
 	}
 	fake.releaseRecoveryClaimReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *Storage) SetStatus(arg1 context.Context, arg2 string, arg3 storage.TxStatus, arg4 string) error {
+	fake.setStatusMutex.Lock()
+	ret, specificReturn := fake.setStatusReturnsOnCall[len(fake.setStatusArgsForCall)]
+	fake.setStatusArgsForCall = append(fake.setStatusArgsForCall, struct {
+		arg1 context.Context
+		arg2 string
+		arg3 storage.TxStatus
+		arg4 string
+	}{arg1, arg2, arg3, arg4})
+	stub := fake.SetStatusStub
+	fakeReturns := fake.setStatusReturns
+	fake.recordInvocation("SetStatus", []interface{}{arg1, arg2, arg3, arg4})
+	fake.setStatusMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2, arg3, arg4)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *Storage) SetStatusCallCount() int {
+	fake.setStatusMutex.RLock()
+	defer fake.setStatusMutex.RUnlock()
+	return len(fake.setStatusArgsForCall)
+}
+
+func (fake *Storage) SetStatusCalls(stub func(context.Context, string, storage.TxStatus, string) error) {
+	fake.setStatusMutex.Lock()
+	defer fake.setStatusMutex.Unlock()
+	fake.SetStatusStub = stub
+}
+
+func (fake *Storage) SetStatusArgsForCall(i int) (context.Context, string, storage.TxStatus, string) {
+	fake.setStatusMutex.RLock()
+	defer fake.setStatusMutex.RUnlock()
+	argsForCall := fake.setStatusArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3, argsForCall.arg4
+}
+
+func (fake *Storage) SetStatusReturns(result1 error) {
+	fake.setStatusMutex.Lock()
+	defer fake.setStatusMutex.Unlock()
+	fake.SetStatusStub = nil
+	fake.setStatusReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *Storage) SetStatusReturnsOnCall(i int, result1 error) {
+	fake.setStatusMutex.Lock()
+	defer fake.setStatusMutex.Unlock()
+	fake.SetStatusStub = nil
+	if fake.setStatusReturnsOnCall == nil {
+		fake.setStatusReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.setStatusReturnsOnCall[i] = struct {
 		result1 error
 	}{result1}
 }

@@ -35,18 +35,26 @@ type Config struct {
 	AdvisoryLockID int64
 	// InstanceID identifies the current replica as the lease owner.
 	InstanceID string
+	// NotFoundGracePeriod controls when a transaction whose finality lookup
+	// keeps returning NotFound should be force-marked Deleted to unblock the
+	// recovery queue. When stored_at is older than this duration, the row is
+	// promoted to Deleted instead of being re-queued forever. Default 30 min.
+	// Set to 0 explicitly via yaml to disable promotion.
+	// Source: obsidian "CBDC 压测优化迭代 2026-05-12" §4, fork PR #12.
+	NotFoundGracePeriod time.Duration
 }
 
 // DefaultConfig returns the default recovery configuration
 func DefaultConfig() Config {
 	return Config{
-		Enabled:        true,
-		TTL:            30 * time.Second,
-		ScanInterval:   5 * time.Second,
-		BatchSize:      defaultBatchSize,
-		WorkerCount:    defaultWorkers,
-		LeaseDuration:  defaultLeaseDuration,
-		AdvisoryLockID: defaultLockID,
+		Enabled:             true,
+		TTL:                 30 * time.Second,
+		ScanInterval:        5 * time.Second,
+		BatchSize:           defaultBatchSize,
+		WorkerCount:         defaultWorkers,
+		LeaseDuration:       defaultLeaseDuration,
+		AdvisoryLockID:      defaultLockID,
+		NotFoundGracePeriod: 30 * time.Minute,
 	}
 }
 
@@ -88,6 +96,10 @@ func LoadConfig(cfg *config.Configuration) (Config, error) {
 	}
 	if config.InstanceID != "" {
 		result.InstanceID = config.InstanceID
+	}
+	// NotFoundGracePeriod uses IsSet so an explicit 0 (disable) is honored.
+	if cfg.IsSet(ConfigKeyRecovery + ".notFoundGracePeriod") {
+		result.NotFoundGracePeriod = config.NotFoundGracePeriod
 	}
 
 	return result, nil
