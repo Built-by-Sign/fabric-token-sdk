@@ -6,7 +6,17 @@ SPDX-License-Identifier: Apache-2.0
 
 package ttx
 
-import "github.com/hyperledger-labs/fabric-token-sdk/token"
+import (
+	"context"
+	"time"
+
+	"github.com/hyperledger-labs/fabric-token-sdk/token"
+)
+
+// PhaseRecorder records the duration of a named phase. The implementation is
+// supplied by the caller (cbdc-biz observability layer); the SDK invokes it
+// at instrumentation points inside CollectEndorsementsView.
+type PhaseRecorder func(ctx context.Context, phase string, dur time.Duration)
 
 // EndorsementsOpts is used to configure the CollectEndorsementsView
 type EndorsementsOpts struct {
@@ -28,6 +38,9 @@ type EndorsementsOpts struct {
 	// ApprovalMetadata carries optional application-level metadata forwarded to approvers.
 	// Each driver decides how to deliver this information to the approver backend.
 	ApprovalMetadata map[string][]byte
+	// PhaseRecorder, when non-nil, is invoked by CollectEndorsementsView at each
+	// instrumented sub-phase. Optional; nil disables phase recording.
+	PhaseRecorder PhaseRecorder
 }
 
 func (o *EndorsementsOpts) ExternalWalletSigner(id string) ExternalWalletSigner {
@@ -118,6 +131,15 @@ func WithApprovalMetadata(metadata map[string][]byte) EndorsementsOpt {
 	return func(o *EndorsementsOpts) error {
 		o.ApprovalMetadata = metadata
 
+		return nil
+	}
+}
+
+// WithPhaseRecorder installs a callback invoked at each instrumented sub-phase
+// inside CollectEndorsementsView. Nil callback is a no-op.
+func WithPhaseRecorder(r PhaseRecorder) EndorsementsOpt {
+	return func(o *EndorsementsOpts) error {
+		o.PhaseRecorder = r
 		return nil
 	}
 }

@@ -8,6 +8,7 @@ package auditor
 
 import (
 	"context"
+	"math/big"
 	"time"
 
 	"github.com/hyperledger-labs/fabric-smart-client/pkg/utils/errors"
@@ -183,6 +184,41 @@ func (a *Service) Append(ctx context.Context, tx Transaction) error {
 func (a *Service) Release(ctx context.Context, tx Transaction) {
 	a.metrics.ReleasesTotal.Add(1)
 	a.auditDB.ReleaseLocks(ctx, string(tx.Request().Anchor))
+}
+
+// AppendRecord stores the audit record for the passed transaction. Behaves
+// like Append but accepts a pre-computed AuditRecord, allowing the caller
+// to skip a second AuditRecord computation on the request.
+//
+// Reapplied stub: the upstream Append path re-derives the record internally
+// via newRequestWrapper.AuditRecord — perf gain over Append is lost in this
+// stub, but functional behavior matches.
+func (a *Service) AppendRecord(ctx context.Context, tx Transaction, _ *token.AuditRecord) error {
+	return a.Append(ctx, tx)
+}
+
+// SumHoldingsByEnrollmentID returns the per-EID balance (pending+confirmed)
+// for the passed enrollment ids. When tokenTypes is non-empty, only those
+// types are summed; otherwise every type is included.
+//
+// Reapplied stub: the original fork used a single batch GROUP BY query.
+// This stub falls back to per-EID HoldingsFilter, which is correct but
+// issues one query per EID. Optimization is tracked in obsidian
+// "CBDC 压测优化迭代 2026-05-13" §8.1.
+func (a *Service) SumHoldingsByEnrollmentID(ctx context.Context, eids []string, tokenTypes []token2.Type) (map[string]*big.Int, error) {
+	result := make(map[string]*big.Int, len(eids))
+	for _, eid := range eids {
+		f := a.auditDB.NewHoldingsFilter().ByEnrollmentId(eid)
+		for _, tt := range tokenTypes {
+			f = f.ByType(tt)
+		}
+		executed, err := f.Execute(ctx)
+		if err != nil {
+			return nil, errors.WithMessagef(err, "holdings query for [%s] failed", eid)
+		}
+		result[eid] = executed.Sum()
+	}
+	return result, nil
 }
 
 // SetStatus sets the status of the audit records with the passed transaction id to the passed status

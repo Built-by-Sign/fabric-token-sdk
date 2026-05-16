@@ -8,6 +8,7 @@ package auditor
 
 import (
 	"context"
+	"math/big"
 	"reflect"
 
 	"github.com/hyperledger-labs/fabric-token-sdk/token"
@@ -15,6 +16,7 @@ import (
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/auditor"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/storage/auditdb"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/ttx/dep/db"
+	token2 "github.com/hyperledger-labs/fabric-token-sdk/token/token"
 )
 
 var (
@@ -30,6 +32,13 @@ type Service interface {
 	Release(ctx context.Context, tx auditor.Transaction)
 	GetTokenRequest(ctx context.Context, id string) ([]byte, error)
 	Check(ctx context.Context) ([]string, error)
+	// AppendRecord stores the audit record for the passed transaction. Behaves
+	// like Append but accepts a pre-computed AuditRecord (perf-oriented).
+	AppendRecord(ctx context.Context, tx auditor.Transaction, record *token.AuditRecord) error
+	// SumHoldingsByEnrollmentID returns the per-EID balance for the passed
+	// enrollment IDs. When tokenTypes is non-empty, only those types are
+	// summed; otherwise every type is included.
+	SumHoldingsByEnrollmentID(ctx context.Context, eids []string, tokenTypes []token2.Type) (map[string]*big.Int, error)
 }
 
 //go:generate counterfeiter -o mock/store_service.go -fake-name AuditStoreService . StoreService

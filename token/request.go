@@ -12,6 +12,7 @@ package token
 
 import (
 	"context"
+	"time"
 
 	"github.com/hyperledger-labs/fabric-smart-client/pkg/utils/errors"
 	"github.com/hyperledger-labs/fabric-smart-client/pkg/utils/proto"
@@ -101,7 +102,15 @@ type TransferOptions struct {
 	TokenIDs []*token.ID
 	// RestRecipientIdentity TODO:
 	RestRecipientIdentity *RecipientData
+	// PhaseRecorder, when non-nil, is invoked at instrumented sub-phases of
+	// Request.Transfer (token selection, ZK proof, serialize). Optional.
+	PhaseRecorder TransferPhaseRecorder
 }
+
+// TransferPhaseRecorder records the duration of a named sub-phase inside
+// Request.Transfer. The callback is supplied by the caller; SDK invokes it
+// at each instrumentation point.
+type TransferPhaseRecorder func(ctx context.Context, phase string, dur time.Duration)
 
 // CompileTransferOptions aggregates multiple TransferOption functions into a single TransferOptions struct.
 func CompileTransferOptions(opts ...TransferOption) (*TransferOptions, error) {
@@ -123,6 +132,15 @@ func WithTokenSelector(selector Selector) TransferOption {
 	return func(o *TransferOptions) error {
 		o.Selector = selector
 
+		return nil
+	}
+}
+
+// WithPhaseRecorder installs a callback invoked at each instrumented sub-phase
+// inside Request.Transfer. Nil callback is a no-op.
+func WithPhaseRecorder(r TransferPhaseRecorder) TransferOption {
+	return func(o *TransferOptions) error {
+		o.PhaseRecorder = r
 		return nil
 	}
 }
