@@ -26,6 +26,12 @@ type TxOptions struct {
 	NetworkTxID               network.TxID
 	NoCachingRequest          bool
 	AnonymousTransaction      bool
+	// PhaseRecorder is invoked by orderingView at each instrumented sub-phase
+	// (ord_broadcast, ord_get_tokens_service, ord_cache_request). Reuses the
+	// PhaseRecorder type defined in endorse_opts.go so callers can share one
+	// callback across CollectEndorsementsView and OrderingView. Nil disables
+	// recording.
+	PhaseRecorder PhaseRecorder
 }
 
 func CompileOpts(opts ...TxOption) (*TxOptions, error) {
@@ -69,6 +75,18 @@ func WithNamespace(namespace string) TxOption {
 	return func(o *TxOptions) error {
 		o.TMSID.Namespace = namespace
 
+		return nil
+	}
+}
+
+// WithOrderingPhaseRecorder installs a callback invoked at each instrumented
+// sub-phase inside OrderingView (ord_broadcast, ord_get_tokens_service,
+// ord_cache_request). Reuses the PhaseRecorder type from endorse_opts.go so a
+// single callback can be shared across the endorsement and ordering views.
+// Nil callback is a no-op.
+func WithOrderingPhaseRecorder(r PhaseRecorder) TxOption {
+	return func(o *TxOptions) error {
+		o.PhaseRecorder = r
 		return nil
 	}
 }

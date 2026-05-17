@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package ttx
 
 import (
+	"context"
 	"time"
 
 	"github.com/hyperledger-labs/fabric-smart-client/pkg/utils/errors"
@@ -32,6 +33,15 @@ func NewOrderingViewWithOpts(opts ...TxOption) *orderingView {
 	return &orderingView{opts: opts}
 }
 
+// recordOrderingPhase invokes options.PhaseRecorder if non-nil. Same shape as
+// CollectEndorsementsView.recordPhase.
+func recordOrderingPhase(ctx context.Context, options *TxOptions, phase string, start time.Time) {
+	if options == nil || options.PhaseRecorder == nil {
+		return
+	}
+	options.PhaseRecorder(ctx, phase, time.Since(start))
+}
+
 // Call execute the view.
 // The view does the following:
 // 1. It broadcasts the token transaction to the proper backend.
@@ -42,18 +52,27 @@ func (o *orderingView) Call(context view.Context) (interface{}, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to compile options")
 	}
-	if err := o.broadcast(context, options.Transaction); err != nil {
-		return nil, err
+
+	broadcastStart := time.Now()
+	broadcastErr := o.broadcast(context, options.Transaction)
+	recordOrderingPhase(context.Context(), options, "ord_broadcast", broadcastStart)
+	if broadcastErr != nil {
+		return nil, broadcastErr
 	}
 
 	// cache the token request into the tokens db
+	getSvcStart := time.Now()
 	t, err := tokens.GetService(context, options.Transaction.TMSID())
+	recordOrderingPhase(context.Context(), options, "ord_get_tokens_service", getSvcStart)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get tokens db for [%s]", options.Transaction.TMSID())
 	}
 	if !options.NoCachingRequest {
-		if err := t.CacheRequest(context.Context(), options.Transaction.TokenRequest); err != nil {
-			logger.WarnfContext(context.Context(), "failed to cache token request [%s], this might cause delay, investigate when possible: [%s]", options.Transaction.TokenRequest.Anchor, err)
+		cacheStart := time.Now()
+		cacheErr := t.CacheRequest(context.Context(), options.Transaction.TokenRequest)
+		recordOrderingPhase(context.Context(), options, "ord_cache_request", cacheStart)
+		if cacheErr != nil {
+			logger.WarnfContext(context.Context(), "failed to cache token request [%s], this might cause delay, investigate when possible: [%s]", options.Transaction.TokenRequest.Anchor, cacheErr)
 		}
 	}
 
