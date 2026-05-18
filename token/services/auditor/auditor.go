@@ -150,7 +150,9 @@ func (a *Service) Append(ctx context.Context, tx Transaction) error {
 		return err
 	}
 	// append request to audit db
-	if err := a.auditDB.Append(ctx, newRequestWrapper(tx.Request(), tms)); err != nil {
+	if err := runPhase(ctx, "av_append_db", func(c context.Context) error {
+		return a.auditDB.Append(c, newRequestWrapper(tx.Request(), tms))
+	}); err != nil {
 		a.metrics.AppendErrors.Add(1)
 
 		return errors.WithMessagef(err, "failed appending request %s", tx.ID())
@@ -172,7 +174,9 @@ func (a *Service) Append(ctx context.Context, tx Transaction) error {
 		a.finalityTracer,
 		a.metricsProvider,
 	)
-	if err := net.AddFinalityListener(tx.Namespace(), tx.ID(), r); err != nil {
+	if err := runPhase(ctx, "av_append_add_listener", func(_ context.Context) error {
+		return net.AddFinalityListener(tx.Namespace(), tx.ID(), r)
+	}); err != nil {
 		return errors.WithMessagef(err, "failed listening to network [%s:%s]", tx.Network(), tx.Channel())
 	}
 	logger.DebugfContext(ctx, "append done for request [%s]", tx.ID())

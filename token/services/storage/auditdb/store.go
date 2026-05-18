@@ -149,8 +149,15 @@ func (d *StoreService) NewTransaction() (dbdriver.TransactionStoreTransaction, e
 func (d *StoreService) Append(ctx context.Context, req tokenRequest) error {
 	logger.DebugfContext(ctx, "appending new record... [%s]", req)
 
-	record, err := req.AuditRecord(ctx)
-	if err != nil {
+	var record *token.AuditRecord
+	if err := runPhase(ctx, "av_append_audit_record", func(c context.Context) error {
+		r, err := req.AuditRecord(c)
+		if err != nil {
+			return err
+		}
+		record = r
+		return nil
+	}); err != nil {
 		return errors.WithMessagef(err, "failed getting audit records for request [%s]", req)
 	}
 
@@ -160,12 +167,26 @@ func (d *StoreService) Append(ctx context.Context, req tokenRequest) error {
 	if err != nil {
 		return errors.Wrapf(err, "failed to marshal token request [%s]", req)
 	}
-	mov, err := ttxdb.Movements(ctx, record, now)
-	if err != nil {
+	var mov []ttxdb.MovementRecord
+	if err := runPhase(ctx, "av_append_movements", func(c context.Context) error {
+		m, err := ttxdb.Movements(c, record, now)
+		if err != nil {
+			return err
+		}
+		mov = m
+		return nil
+	}); err != nil {
 		return errors.WithMessagef(err, "failed parsing movements from audit record")
 	}
-	txs, err := ttxdb.TransactionRecords(ctx, record, now)
-	if err != nil {
+	var txs []ttxdb.TransactionRecord
+	if err := runPhase(ctx, "av_append_tx_records", func(c context.Context) error {
+		t, err := ttxdb.TransactionRecords(c, record, now)
+		if err != nil {
+			return err
+		}
+		txs = t
+		return nil
+	}); err != nil {
 		return errors.WithMessagef(err, "failed parsing transactions from audit record")
 	}
 
