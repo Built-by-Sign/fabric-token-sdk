@@ -10,11 +10,13 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"time"
 
 	"github.com/hyperledger-labs/fabric-smart-client/pkg/utils/errors"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/driver"
 	idriver "github.com/hyperledger-labs/fabric-token-sdk/token/services/identity/driver"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/logging"
+	"github.com/hyperledger-labs/fabric-token-sdk/token/services/utils/phase"
 )
 
 //go:generate counterfeiter -o mock/wf.go -fake-name WalletFactory . WalletFactory
@@ -70,10 +72,15 @@ func (r *Registry) RegisterIdentity(ctx context.Context, config driver.IdentityC
 //
 // Note: Lookup only takes short RLocks for map reads and does not hold the lock while calling external services.
 func (r *Registry) Lookup(ctx context.Context, id driver.WalletLookupID) (driver.Wallet, idriver.IdentityInfo, idriver.WalletID, error) {
+	lookupStart := time.Now()
+	defer phase.Record(ctx, "ow_lookup_total", lookupStart)
+
 	r.Logger.DebugfContext(ctx, "lookup wallet by [%T]", id)
 	var walletIdentifiers []string
 
+	mapStart := time.Now()
 	ident, walletID, err := r.Role.MapToIdentity(ctx, id)
+	phase.Record(ctx, "ow_map_to_identity", mapStart)
 	if err != nil {
 		r.Logger.Errorf("failed to map wallet [%T] to identity [%s], use a fallback strategy", id, err)
 		fail := true
@@ -82,7 +89,9 @@ func (r *Registry) Lookup(ctx context.Context, id driver.WalletLookupID) (driver
 		if ok {
 			r.Logger.DebugfContext(ctx, "lookup failed, check if there is a wallet for identity [%s]", passedIdentity)
 			// is this identity registered
+			getWalletIDStart := time.Now()
 			wID, err := r.GetWalletID(ctx, passedIdentity)
+			phase.Record(ctx, "ow_get_wallet_id_fallback", getWalletIDStart)
 			if err == nil && len(wID) != 0 {
 				r.Logger.DebugfContext(ctx, "lookup failed, there is a wallet for identity [%s]: [%s]", passedIdentity, wID)
 				// we got a hit
@@ -98,12 +107,15 @@ func (r *Registry) Lookup(ctx context.Context, id driver.WalletLookupID) (driver
 	r.Logger.DebugfContext(ctx, "looked-up identifier [%s:%s]", ident, logging.Prefix(walletID))
 	wID := walletID
 	// Short RLock while reading from the map cache. Do not hold while calling external services.
+	cacheStart := time.Now()
 	r.WalletMu.RLock()
 	walletEntry, ok := r.Wallets[wID]
 	r.WalletMu.RUnlock()
 	if ok {
+		phase.Record(ctx, "ow_lookup_cache_hit_primary", cacheStart)
 		return walletEntry, nil, wID, nil
 	}
+	phase.Record(ctx, "ow_lookup_cache_miss_primary", cacheStart)
 	walletIdentifiers = append(walletIdentifiers, wID)
 
 	// give it a second chance
@@ -111,16 +123,21 @@ func (r *Registry) Lookup(ctx context.Context, id driver.WalletLookupID) (driver
 	if ok {
 		r.Logger.DebugfContext(ctx, "no wallet found, check if there is a wallet for identity [%s]", passedIdentity)
 		// is this identity registered
+		getWalletIDStart := time.Now()
 		passedWalletID, err := r.GetWalletID(ctx, passedIdentity)
+		phase.Record(ctx, "ow_get_wallet_id_passed", getWalletIDStart)
 		if err == nil && len(passedWalletID) != 0 {
 			r.Logger.DebugfContext(ctx, "no wallet found, there is a wallet for identity [%s]: [%s]", passedIdentity, passedWalletID)
 			// we got a hit
+			cacheStart = time.Now()
 			r.WalletMu.RLock()
 			walletEntry, ok = r.Wallets[passedWalletID]
 			r.WalletMu.RUnlock()
 			if ok {
+				phase.Record(ctx, "ow_lookup_cache_hit_passed", cacheStart)
 				return walletEntry, nil, passedWalletID, nil
 			}
+			phase.Record(ctx, "ow_lookup_cache_miss_passed", cacheStart)
 			r.Logger.DebugfContext(ctx, "no wallet found, there is a wallet for identity [%s]: [%s] but it has not been recreated yet", passedIdentity, passedWalletID)
 		}
 		walletIdentifiers = append(walletIdentifiers, passedWalletID)
@@ -128,17 +145,22 @@ func (r *Registry) Lookup(ctx context.Context, id driver.WalletLookupID) (driver
 
 	r.Logger.DebugfContext(ctx, "no wallet found for [%s] at [%s]", passedIdentity, logging.Prefix(wID))
 	if len(ident) != 0 {
+		getWalletIDStart := time.Now()
 		identityWID, err := r.GetWalletID(ctx, ident)
+		phase.Record(ctx, "ow_get_wallet_id_ident", getWalletIDStart)
 		r.Logger.DebugfContext(ctx, "wallet for identity [%s] -> [%s:%s]", ident, identityWID, err)
 		if err == nil && len(identityWID) != 0 {
+			cacheStart = time.Now()
 			r.WalletMu.RLock()
 			w, ok := r.Wallets[identityWID]
 			r.WalletMu.RUnlock()
 			if ok {
+				phase.Record(ctx, "ow_lookup_cache_hit_ident", cacheStart)
 				r.Logger.DebugfContext(ctx, "found wallet [%s:%s:%s:%s]", ident, walletID, w.ID(), identityWID)
 
 				return w, nil, identityWID, nil
 			}
+			phase.Record(ctx, "ow_lookup_cache_miss_ident", cacheStart)
 		}
 		walletIdentifiers = append(walletIdentifiers, identityWID)
 	}
@@ -149,7 +171,9 @@ func (r *Registry) Lookup(ctx context.Context, id driver.WalletLookupID) (driver
 		}
 		// give it a second chance
 		var idInfo idriver.IdentityInfo
+		getIdentityInfoStart := time.Now()
 		idInfo, err = r.Role.GetIdentityInfo(ctx, walletIdentifier)
+		phase.Record(ctx, "ow_get_identity_info", getIdentityInfoStart)
 		if err == nil {
 			r.Logger.DebugfContext(ctx, "identity info found at [%s]", logging.Prefix(walletIdentifier))
 
@@ -244,6 +268,9 @@ func (r *Registry) GetWalletID(ctx context.Context, identity driver.Identity) (s
 }
 
 func (r *Registry) WalletByID(ctx context.Context, role idriver.IdentityRoleType, id driver.WalletLookupID) (driver.Wallet, error) {
+	totalStart := time.Now()
+	defer phase.Record(ctx, "ow_registry_wallet_by_id_total", totalStart)
+
 	r.Logger.DebugfContext(ctx, "role [%d] lookup wallet by [%T]", role, id)
 	defer r.Logger.DebugfContext(ctx, "role [%d] lookup wallet by [%T] done", role, id)
 
@@ -253,20 +280,25 @@ func (r *Registry) WalletByID(ctx context.Context, role idriver.IdentityRoleType
 	v, ok := id.(string)
 	if ok {
 		r.Logger.DebugfContext(ctx, "role [%d] lookup wallet by string [%s]", role, v)
+		cacheStart := time.Now()
 		r.WalletMu.RLock()
 		w := r.Wallets[v]
 		r.WalletMu.RUnlock()
 		if w != nil {
+			phase.Record(ctx, "ow_registry_cache_hit_string", cacheStart)
 			r.Logger.DebugfContext(ctx, "role [%d] lookup wallet by string [%s], found.", role, v)
 
 			return w, nil
 		}
+		phase.Record(ctx, "ow_registry_cache_miss_string", cacheStart)
 	}
 
 	// Not in cache: do the lookup to get identity info and wallet id (no locks held across external calls)
 	// Lookup itself takes short RLocks for map reads. We call Lookup without holding
 	// the global mutex to avoid blocking other operations while doing external lookups.
+	lookupStart := time.Now()
 	w, idInfo, wID, err := r.Lookup(ctx, id)
+	phase.Record(ctx, "ow_registry_lookup", lookupStart)
 	if err != nil {
 		r.Logger.DebugfContext(ctx, "failed with error [%+v]", err)
 
@@ -280,7 +312,9 @@ func (r *Registry) WalletByID(ctx context.Context, role idriver.IdentityRoleType
 	r.Logger.DebugfContext(ctx, "no")
 
 	// Register the newly created wallet but check if another goroutine already created it.
+	lockWaitStart := time.Now()
 	r.WalletMu.Lock()
+	phase.Record(ctx, "ow_registry_lock_wait", lockWaitStart)
 	defer r.WalletMu.Unlock()
 	if existing, ok := r.Wallets[wID]; ok {
 		// Another goroutine created and registered the wallet in the meantime; prefer it.
@@ -288,7 +322,9 @@ func (r *Registry) WalletByID(ctx context.Context, role idriver.IdentityRoleType
 	}
 	// Create the wallet without holding the registry lock (avoid holding locks while calling external code).
 	r.Logger.DebugfContext(ctx, "create wallet [%s]", wID)
+	newWalletStart := time.Now()
 	newWallet, err := r.WalletFactory.NewWallet(ctx, wID, role, r, idInfo)
+	phase.Record(ctx, "ow_registry_new_wallet", newWalletStart)
 	if err != nil {
 		return nil, err
 	}

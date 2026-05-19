@@ -9,6 +9,7 @@ package tokens
 import (
 	"context"
 	"runtime/debug"
+	"time"
 
 	"github.com/hyperledger-labs/fabric-smart-client/pkg/utils/errors"
 	"github.com/hyperledger-labs/fabric-token-sdk/token"
@@ -18,6 +19,7 @@ import (
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/network"
 	dbdriver "github.com/hyperledger-labs/fabric-token-sdk/token/services/storage/db/driver"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/utils"
+	"github.com/hyperledger-labs/fabric-token-sdk/token/services/utils/phase"
 	token2 "github.com/hyperledger-labs/fabric-token-sdk/token/token"
 	"go.uber.org/zap/zapcore"
 )
@@ -162,22 +164,31 @@ func (t *Service) AppendValid(ctx context.Context, tx dbdriver.Transaction, txID
 
 // CacheRequest extracts actions from a token request and caches them locally to avoid redundant parsing during the commit phase.
 func (t *Service) CacheRequest(ctx context.Context, request *token.Request) error {
+	totalStart := time.Now()
+	defer phase.Record(ctx, "cache_request_total", totalStart)
+
+	extractStart := time.Now()
 	toSpend, toAppend, err := t.extractActions(ctx, request.Anchor, request)
+	phase.Record(ctx, "cache_request_extract_actions", extractStart)
 	if err != nil {
 		return errors.WithMessagef(err, "failed to extract actions for request [%s]", request.ID())
 	}
 	logger.DebugfContext(ctx, "cache request [%s]", request.ID())
 	// append to cache
+	marshalStart := time.Now()
 	msgToSign, err := request.MarshalToSign()
+	phase.Record(ctx, "cache_request_marshal_to_sign", marshalStart)
 	if err != nil {
 		return errors.WithMessagef(err, "failed to marshal token request [%s]", request.ID())
 	}
+	cacheAddStart := time.Now()
 	t.RequestsCache.Add(string(request.Anchor), &CacheEntry{
 		Request:   request,
 		ToSpend:   toSpend,
 		ToAppend:  toAppend,
 		MsgToSign: msgToSign,
 	})
+	phase.Record(ctx, "cache_request_cache_add", cacheAddStart)
 
 	return nil
 }
@@ -362,7 +373,9 @@ func (t *Service) getActions(ctx context.Context, anchor token.RequestAnchor, re
 }
 
 func (t *Service) extractActions(ctx context.Context, anchor token.RequestAnchor, request *token.Request) ([]*token2.ID, []TokenToAppend, error) {
+	tmsStart := time.Now()
 	tms, err := t.TMSProvider.GetManagementService(token.WithTMSID(t.tmsID))
+	phase.Record(ctx, "cache_request_get_tms", tmsStart)
 	if err != nil {
 		return nil, nil, errors.WithMessagef(err, "failed getting token management service [%s]", t.tmsID)
 	}
@@ -376,18 +389,24 @@ func (t *Service) extractActions(ctx context.Context, anchor token.RequestAnchor
 	if auditorFlag {
 		logger.DebugfContext(ctx, "transaction [%s], I must be the auditor", anchor)
 	}
+	metadataStart := time.Now()
 	md, err := request.GetMetadata()
+	phase.Record(ctx, "cache_request_get_metadata", metadataStart)
 	if err != nil {
 		logger.DebugfContext(ctx, "transaction [%s], failed to get metadata [%s]", anchor, err)
 
 		return nil, nil, errors.WithMessagef(err, "transaction [%s], failed to get request metadata", anchor)
 	}
 
+	ioStart := time.Now()
 	is, os, err := request.InputsAndOutputsNoRecipients(ctx)
+	phase.Record(ctx, "cache_request_inputs_outputs_no_recipients", ioStart)
 	if err != nil {
 		return nil, nil, errors.WithMessagef(err, "failed to get request's outputs")
 	}
+	parseStart := time.Now()
 	toSpend, toAppend, err := t.Parse(ctx, auth, anchor, md, is, os, auditorFlag, precision, graphHiding)
+	phase.Record(ctx, "cache_request_parse", parseStart)
 	logger.DebugfContext(ctx, "transaction [%s] parsed [%d] inputs and [%d] outputs", anchor, len(toSpend), len(toAppend))
 
 	return toSpend, toAppend, err
@@ -414,6 +433,7 @@ func (t *Service) Parse(
 	logger.DebugfContext(ctx, "parse [%d] inputs and [%d] outputs from [%s]", is.Count(), os.Count(), requestAnchor)
 
 	// parse the inputs
+	inputsStart := time.Now()
 	for _, input := range is.Inputs() {
 		if input.Id == nil {
 			logger.DebugfContext(ctx, "transaction [%s] found an input that is not mine, skip it", requestAnchor)
@@ -423,8 +443,11 @@ func (t *Service) Parse(
 		logger.DebugfContext(ctx, "transaction [%s] delete input [%s]", requestAnchor, input.Id)
 		toSpend = append(toSpend, input.Id)
 	}
+	phase.Record(ctx, "cache_request_parse_inputs", inputsStart)
 
 	// parse the outputs
+	outputsStart := time.Now()
+	defer phase.Record(ctx, "cache_request_parse_outputs", outputsStart)
 	for _, output := range os.Outputs() {
 		// if this is a redeem, then skip
 		if len(output.Token.Owner) == 0 {
@@ -434,8 +457,12 @@ func (t *Service) Parse(
 		}
 
 		// process the output to identify the relations with the current TMS
+		issuedStart := time.Now()
 		issuerFlag := !output.Issuer.IsNone() && auth.Issued(ctx, output.Issuer, &output.Token)
+		phase.Record(ctx, "cache_request_auth_issued", issuedStart)
+		isMineStart := time.Now()
 		ownerWalletID, ids, mine := auth.IsMine(ctx, &output.Token)
+		phase.Record(ctx, "cache_request_auth_is_mine", isMineStart)
 		if logger.IsEnabledFor(zapcore.DebugLevel) {
 			if mine {
 				logger.DebugfContext(ctx, "transaction [%s], found a token and it is mine with [%s][%v]", requestAnchor, ownerWalletID, ids)
@@ -453,7 +480,9 @@ func (t *Service) Parse(
 			continue
 		}
 
+		ownerTypeStart := time.Now()
 		ownerType, ownerIdentity, err := auth.OwnerType(output.Token.Owner)
+		phase.Record(ctx, "cache_request_owner_type", ownerTypeStart)
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "failed to extract owner type for token [%s:%d]", requestAnchor, output.Index)
 		}

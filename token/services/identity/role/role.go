@@ -9,12 +9,14 @@ package role
 import (
 	"context"
 	"runtime/debug"
+	"time"
 
 	"github.com/hyperledger-labs/fabric-smart-client/pkg/utils/errors"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/driver"
 	idriver "github.com/hyperledger-labs/fabric-token-sdk/token/services/identity/driver"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/logging"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/utils"
+	"github.com/hyperledger-labs/fabric-token-sdk/token/services/utils/phase"
 )
 
 // LocalMembership abstracts the local identity/membership service used by a Role.
@@ -141,9 +143,12 @@ func (r *Role) mapStringToID(ctx context.Context, v string) (driver.Identity, st
 	labelAsIdentity := driver.Identity(label)
 
 	// check immediately if there is an identifier with that label
+	getIdentifierStart := time.Now()
 	if idIdentifier, err := r.localMembership.GetIdentifier(ctx, labelAsIdentity); err == nil {
+		phase.Record(ctx, "ow_map_string_get_identifier", getIdentifierStart)
 		return nil, idIdentifier, nil
 	}
+	phase.Record(ctx, "ow_map_string_get_identifier", getIdentifierStart)
 
 	switch {
 	case len(label) == 0:
@@ -170,16 +175,24 @@ func (r *Role) mapStringToID(ctx context.Context, v string) (driver.Identity, st
 		r.logger.DebugfContext(ctx, "passed node identity as view identity")
 
 		return nil, defaultIdentifier, nil
-	case r.localMembership.IsMe(ctx, labelAsIdentity):
+	}
+
+	isMeStart := time.Now()
+	if r.localMembership.IsMe(ctx, labelAsIdentity) {
+		phase.Record(ctx, "ow_map_string_is_me", isMeStart)
 		r.logger.DebugfContext(ctx, "passed a local member")
 		id := labelAsIdentity
+		getIdentifierStart = time.Now()
 		if idIdentifier, err := r.localMembership.GetIdentifier(ctx, id); err == nil {
+			phase.Record(ctx, "ow_map_string_get_identifier_after_is_me", getIdentifierStart)
 			return nil, idIdentifier, nil
 		}
+		phase.Record(ctx, "ow_map_string_get_identifier_after_is_me", getIdentifierStart)
 		r.logger.DebugfContext(ctx, "failed getting identity info for [%s], returning the identity", id)
 
 		return id, "", nil
 	}
+	phase.Record(ctx, "ow_map_string_is_me", isMeStart)
 
 	r.logger.DebugfContext(ctx, "cannot find match for string [%s]", v)
 
@@ -220,24 +233,38 @@ func (r *Role) mapIdentityToID(ctx context.Context, v driver.Identity) (driver.I
 		r.logger.DebugfContext(ctx, "passed identity is the node identity (same bytes)")
 
 		return nil, defaultIdentifier, nil
-	case r.localMembership.IsMe(ctx, id):
+	}
+
+	isMeStart := time.Now()
+	if r.localMembership.IsMe(ctx, id) {
+		phase.Record(ctx, "ow_map_identity_is_me", isMeStart)
 		r.logger.DebugfContext(ctx, "passed identity is me")
+		getIdentifierStart := time.Now()
 		if idIdentifier, err := r.localMembership.GetIdentifier(ctx, id); err == nil {
+			phase.Record(ctx, "ow_map_identity_get_identifier_after_is_me", getIdentifierStart)
 			return id, idIdentifier, nil
 		}
+		phase.Record(ctx, "ow_map_identity_get_identifier_after_is_me", getIdentifierStart)
 		r.logger.DebugfContext(ctx, "failed getting identity info for [%s], returning the identity", id)
 
 		return id, "", nil
 	}
+	phase.Record(ctx, "ow_map_identity_is_me", isMeStart)
 	r.logger.DebugfContext(ctx, "looking up identifier for identity as label [%s]", utils.Hashable(id))
 
 	label := string(id)
+	getIdentityInfoStart := time.Now()
 	if info, err := r.localMembership.GetIdentityInfo(ctx, label, nil); err == nil {
+		phase.Record(ctx, "ow_map_identity_get_identity_info", getIdentityInfoStart)
 		return nil, info.ID(), nil
 	}
+	phase.Record(ctx, "ow_map_identity_get_identity_info", getIdentityInfoStart)
+	getIdentifierStart := time.Now()
 	if idIdentifier, err := r.localMembership.GetIdentifier(ctx, id); err == nil {
+		phase.Record(ctx, "ow_map_identity_get_identifier", getIdentifierStart)
 		return nil, idIdentifier, nil
 	}
+	phase.Record(ctx, "ow_map_identity_get_identifier", getIdentifierStart)
 
 	r.logger.DebugfContext(ctx, "cannot find match for driver.Identity string [%s]", id)
 

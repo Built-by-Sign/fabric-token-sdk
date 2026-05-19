@@ -9,7 +9,11 @@ SPDX-License-Identifier: Apache-2.0
 package cache
 
 import (
+	"context"
+	"time"
+
 	"github.com/dgraph-io/ristretto/v2"
+	"github.com/hyperledger-labs/fabric-token-sdk/token/services/utils/phase"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -64,8 +68,12 @@ func (c *ristrettoCache[T]) Get(key string) (T, bool) {
 }
 
 func (c *ristrettoCache[T]) Add(key string, value T) {
+	setStart := time.Now()
 	c.cache.Set(key, value, ZeroCost)
+	phase.Record(context.Background(), "ristretto_cache_set", setStart)
+	waitStart := time.Now()
 	c.cache.Wait()
+	phase.Record(context.Background(), "ristretto_cache_wait", waitStart)
 }
 
 func (c *ristrettoCache[T]) Delete(key string) {

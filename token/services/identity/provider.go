@@ -9,6 +9,7 @@ package identity
 import (
 	"context"
 	"runtime/debug"
+	"time"
 
 	"github.com/hyperledger-labs/fabric-smart-client/pkg/utils/errors"
 	"github.com/hyperledger-labs/fabric-smart-client/platform/common/utils/cache/secondcache"
@@ -16,6 +17,7 @@ import (
 	"github.com/hyperledger-labs/fabric-token-sdk/token/driver"
 	idriver "github.com/hyperledger-labs/fabric-token-sdk/token/services/identity/driver"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/logging"
+	"github.com/hyperledger-labs/fabric-token-sdk/token/services/utils/phase"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -132,6 +134,9 @@ func (p *Provider) RegisterSigner(ctx context.Context, identity driver.Identity,
 // There is no secondary "is me" cache: a real cache would need careful handling for
 // single-use identities (for example Idemix nyms) and is intentionally omitted here.
 func (p *Provider) AreMe(ctx context.Context, identities ...driver.Identity) []string {
+	start := time.Now()
+	defer phase.Record(ctx, "areme_provider_total", start)
+
 	p.Logger.DebugfContext(ctx, "identity [%s] is me?", identities)
 
 	return p.areMe(ctx, identities...)
@@ -237,21 +242,28 @@ func (p *Provider) areMe(ctx context.Context, identities ...driver.Identity) []s
 	notFound := make([]driver.Identity, 0)
 
 	// check local cache
+	cacheScanStart := time.Now()
 	for _, id := range identities {
+		cacheStart := time.Now()
 		if _, ok := p.signers.Get(id.UniqueID()); ok {
+			phase.Record(ctx, "areme_provider_signer_cache_hit", cacheStart)
 			p.Logger.DebugfContext(ctx, "is me [%s]? yes, from cache", id)
 			result.Add(id.UniqueID())
 		} else {
+			phase.Record(ctx, "areme_provider_signer_cache_miss", cacheStart)
 			notFound = append(notFound, id)
 		}
 	}
+	phase.Record(ctx, "areme_provider_signer_cache_scan", cacheScanStart)
 
 	if len(notFound) == 0 {
 		return result.ToSlice()
 	}
 
 	// check Storage
+	storageStart := time.Now()
 	found, err := p.storage.GetExistingSignerInfo(ctx, notFound...)
+	phase.Record(ctx, "areme_get_existing_signer_info", storageStart)
 	if err != nil {
 		p.Logger.Errorf("failed checking if a signer exists [%s]", err)
 

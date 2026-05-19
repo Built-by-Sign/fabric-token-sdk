@@ -22,6 +22,7 @@ import (
 	"github.com/hyperledger-labs/fabric-token-sdk/token"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/logging"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/storage/db/driver"
+	"github.com/hyperledger-labs/fabric-token-sdk/token/services/utils/phase"
 )
 
 type walletTables struct {
@@ -60,7 +61,9 @@ func (db *WalletStore) GetWalletID(ctx context.Context, identity token.Identity,
 		Where(cond.And(cond.Eq("identity_hash", idHash), cond.Eq("role_id", roleID))).
 		Format(db.ci)
 
+	queryStart := time.Now()
 	result, err := common.QueryUniqueContext[driver.WalletID](ctx, db.readDB, query, args...)
+	phase.Record(ctx, "ow_get_wallet_id_sql", queryStart)
 	if err != nil {
 		return "", errors.Wrapf(err, "failed getting wallet id for identity [%v]", idHash)
 	}

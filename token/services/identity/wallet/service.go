@@ -8,6 +8,7 @@ package wallet
 
 import (
 	"context"
+	"time"
 
 	"github.com/hyperledger-labs/fabric-smart-client/pkg/utils/errors"
 	tdriver "github.com/hyperledger-labs/fabric-token-sdk/token/driver"
@@ -15,6 +16,7 @@ import (
 	idriver "github.com/hyperledger-labs/fabric-token-sdk/token/services/identity/driver"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/logging"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/utils"
+	"github.com/hyperledger-labs/fabric-token-sdk/token/services/utils/phase"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/token"
 )
 
@@ -155,6 +157,9 @@ func (s *Service) OwnerWalletIDs(ctx context.Context) ([]string, error) {
 
 // OwnerWallet returns the OwnerWallet instance bound to the passed lookup id.
 func (s *Service) OwnerWallet(ctx context.Context, id tdriver.WalletLookupID) (tdriver.OwnerWallet, error) {
+	start := time.Now()
+	defer phase.Record(ctx, "ow_service_total", start)
+
 	w, err := s.RoleRegistries[idriver.OwnerRole].WalletByID(ctx, idriver.OwnerRole, id)
 	if err != nil {
 		return nil, err
