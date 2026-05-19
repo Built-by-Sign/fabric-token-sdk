@@ -10,9 +10,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/hyperledger-labs/fabric-smart-client/pkg/utils/errors"
-	"github.com/hyperledger-labs/fabric-smart-client/platform/common/utils/cache/secondcache"
 	"github.com/hyperledger-labs/fabric-smart-client/platform/common/utils/collections/iterators"
 	driver2 "github.com/hyperledger-labs/fabric-smart-client/platform/view/services/storage/driver"
 	common2 "github.com/hyperledger-labs/fabric-smart-client/platform/view/services/storage/driver/common"
@@ -29,12 +29,20 @@ import (
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/storage/db/driver"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/utils"
 	cache2 "github.com/hyperledger-labs/fabric-token-sdk/token/services/utils/cache"
+	"github.com/hyperledger-labs/fabric-token-sdk/token/services/utils/phase"
 )
 
 type cache[T any] interface {
 	Get(key string) (T, bool)
 	GetOrLoad(key string, loader func() (T, error)) (T, bool, error)
 	Add(key string, value T)
+	Delete(key string)
+}
+
+// SignerInfoCache caches signer existence by identity hash.
+type SignerInfoCache interface {
+	Get(key string) (bool, bool)
+	Add(key string, value bool)
 	Delete(key string)
 }
 
@@ -56,7 +64,7 @@ type IdentityStore struct {
 	ci       common3.CondInterpreter
 	notifier idriver.IdentityConfigurationNotifier
 
-	signerInfoCache cache[bool]
+	signerInfoCache SignerInfoCache
 	auditInfoCache  cache[[]byte]
 	errorWrapper    driver2.SQLErrorWrapper
 }
@@ -64,7 +72,7 @@ type IdentityStore struct {
 func newIdentityStore(
 	readDB, writeDB *sql.DB,
 	tables identityTables,
-	singerInfoCache cache[bool],
+	singerInfoCache SignerInfoCache,
 	auditInfoCache cache[[]byte],
 	ci common3.CondInterpreter,
 	errorWrapper driver2.SQLErrorWrapper,
@@ -92,8 +100,8 @@ func NewCachedIdentityStore(
 		readDB,
 		writeDB,
 		tables,
-		secondcache.NewTyped[bool](5000),
-		secondcache.NewTyped[[]byte](5000),
+		NewSignerInfoCache(),
+		NewSyncMapCache[[]byte](),
 		ci,
 		errorWrapper,
 	)
@@ -119,7 +127,7 @@ func NewNoCacheIdentityStore(
 func NewIdentityStore(
 	readDB, writeDB *sql.DB,
 	tables TableNames,
-	signerInfoCache cache[bool],
+	signerInfoCache SignerInfoCache,
 	auditInfoCache cache[[]byte],
 	ci common3.CondInterpreter,
 	errorWrapper driver2.SQLErrorWrapper,
@@ -144,7 +152,7 @@ func NewIdentityStore(
 func NewIdentityStoreWithNotifier(
 	readDB, writeDB *sql.DB,
 	tables TableNames,
-	signerInfoCache cache[bool],
+	signerInfoCache SignerInfoCache,
 	auditInfoCache cache[[]byte],
 	ci common3.CondInterpreter,
 	errorWrapper driver2.SQLErrorWrapper,
@@ -317,10 +325,15 @@ func (db *IdentityStore) GetExistingSignerInfo(ctx context.Context, ids ...tdriv
 	notFound := make([]string, 0)
 
 	for _, idHash := range idHashes {
+		cacheStart := time.Now()
 		if v, ok := db.signerInfoCache.Get(idHash); !ok {
+			phase.Record(ctx, "signer_info_cache_miss", cacheStart)
 			notFound = append(notFound, idHash)
 		} else if v {
+			phase.Record(ctx, "signer_info_cache_hit", cacheStart)
 			result = append(result, idHash)
+		} else {
+			phase.Record(ctx, "signer_info_cache_negative_hit", cacheStart)
 		}
 	}
 	if len(notFound) == 0 {
@@ -330,10 +343,15 @@ func (db *IdentityStore) GetExistingSignerInfo(ctx context.Context, ids ...tdriv
 	idHashes = notFound
 	notFound = make([]string, 0)
 	for _, idHash := range idHashes {
+		cacheStart := time.Now()
 		if v, ok := db.signerInfoCache.Get(idHash); !ok {
+			phase.Record(ctx, "signer_info_cache_recheck_miss", cacheStart)
 			notFound = append(notFound, idHash)
 		} else if v {
+			phase.Record(ctx, "signer_info_cache_recheck_hit", cacheStart)
 			result = append(result, idHash)
+		} else {
+			phase.Record(ctx, "signer_info_cache_recheck_negative_hit", cacheStart)
 		}
 	}
 	if len(notFound) == 0 {
@@ -349,19 +367,25 @@ func (db *IdentityStore) GetExistingSignerInfo(ctx context.Context, ids ...tdriv
 		Format(db.ci)
 
 	logging.Debug(logger, query, args)
+	queryStart := time.Now()
 	rows, err := db.readDB.QueryContext(ctx, query, args...)
+	phase.Record(ctx, "signer_info_sql", queryStart)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error querying db")
 	}
 	it := common.NewIterator(rows, func(idHash *string) error { return rows.Scan(idHash) })
 
+	scanStart := time.Now()
 	found, err := iterators.Reduce(it, iterators.ToSet[string]())
+	phase.Record(ctx, "signer_info_sql_scan", scanStart)
 	if err != nil {
 		return nil, err
 	}
+	cacheAddStart := time.Now()
 	for _, idHash := range idHashes {
 		db.signerInfoCache.Add(idHash, found.Contains(idHash))
 	}
+	phase.Record(ctx, "signer_info_cache_add", cacheAddStart)
 
 	return append(result, found.ToSlice()...), nil
 }

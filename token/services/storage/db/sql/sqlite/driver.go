@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/hyperledger-labs/fabric-smart-client/platform/common/utils"
-	"github.com/hyperledger-labs/fabric-smart-client/platform/common/utils/cache/secondcache"
 	"github.com/hyperledger-labs/fabric-smart-client/platform/common/utils/lazy"
 	driver2 "github.com/hyperledger-labs/fabric-smart-client/platform/view/services/storage/driver"
 	"github.com/hyperledger-labs/fabric-smart-client/platform/view/services/storage/driver/common"
@@ -87,8 +86,8 @@ func newIdentityStoreProvider(dbProvider sqlite.DbProvider) lazy.Provider[sqlite
 			dbs.ReadDB,
 			dbs.WriteDB,
 			tableNames,
-			secondcache.NewTyped[bool](5000),
-			secondcache.NewTyped[[]byte](5000),
+			common2.NewSignerInfoCache(),
+			common2.NewSyncMapCache[[]byte](),
 			sqlite.NewConditionInterpreter(),
 			&sqlite.ErrorMapper{},
 			nil,

@@ -9,7 +9,6 @@ package postgres
 import (
 	"database/sql"
 
-	"github.com/hyperledger-labs/fabric-smart-client/platform/common/utils/cache/secondcache"
 	scommon "github.com/hyperledger-labs/fabric-smart-client/platform/view/services/storage/driver/common"
 	"github.com/hyperledger-labs/fabric-smart-client/platform/view/services/storage/driver/sql/common"
 	"github.com/hyperledger-labs/fabric-smart-client/platform/view/services/storage/driver/sql/postgres"
@@ -47,8 +46,8 @@ func NewIdentityStore(dbs *scommon.RWDB, tableNames sqlcommon.TableNames, dataSo
 		dbs.ReadDB,
 		dbs.WriteDB,
 		tableNames,
-		secondcache.NewTyped[bool](5000),
-		secondcache.NewTyped[[]byte](5000),
+		sqlcommon.NewSignerInfoCache(),
+		sqlcommon.NewSyncMapCache[[]byte](),
 		postgres.NewConditionInterpreter(),
 		&postgres.ErrorMapper{},
 		notifier,
