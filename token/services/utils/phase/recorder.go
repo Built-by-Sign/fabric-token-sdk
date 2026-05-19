@@ -19,6 +19,7 @@ import (
 const (
 	scopeViews        = "cbdc-biz.views"
 	phaseDurationName = "cbdc.view.phase.duration"
+	phaseCounterName  = "cbdc.view.phase.count"
 	attrPhase         = "phase"
 )
 
@@ -29,8 +30,10 @@ var Buckets = []float64{
 }
 
 var (
-	initOnce sync.Once
-	hist     metric.Float64Histogram
+	initOnce    sync.Once
+	hist        metric.Float64Histogram
+	counterOnce sync.Once
+	counter     metric.Int64Counter
 )
 
 func ensureInit() {
@@ -48,6 +51,19 @@ func ensureInit() {
 	})
 }
 
+func ensureCounterInit() {
+	counterOnce.Do(func() {
+		c, err := otel.Meter(scopeViews).Int64Counter(
+			phaseCounterName,
+			metric.WithDescription("Cumulative counter for named phases (rows written, items processed, ...)"),
+		)
+		if err != nil {
+			return
+		}
+		counter = c
+	})
+}
+
 // Record records the elapsed duration since start under the supplied phase.
 func Record(ctx context.Context, phase string, start time.Time) {
 	RecordDuration(ctx, phase, time.Since(start))
@@ -60,4 +76,18 @@ func RecordDuration(ctx context.Context, phase string, elapsed time.Duration) {
 		return
 	}
 	hist.Record(ctx, elapsed.Seconds(), metric.WithAttributes(attribute.String(attrPhase, phase)))
+}
+
+// Counter adds value to the cumulative counter under the supplied phase. Use
+// it for row counts, byte counts, or any non-latency quantity that should be
+// summed across calls. Negative values are clamped to zero.
+func Counter(ctx context.Context, phase string, value int64) {
+	if value < 0 {
+		value = 0
+	}
+	ensureCounterInit()
+	if counter == nil {
+		return
+	}
+	counter.Add(ctx, value, metric.WithAttributes(attribute.String(attrPhase, phase)))
 }
