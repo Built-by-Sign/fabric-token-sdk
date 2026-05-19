@@ -141,6 +141,25 @@ func (a *Service) Audit(ctx context.Context, tx Transaction) (*token.InputStream
 // Append adds the passed transaction to the auditor database.
 // It also releases the locks acquired by Audit.
 func (a *Service) Append(ctx context.Context, tx Transaction) error {
+	return a.appendImpl(ctx, tx, nil)
+}
+
+// Release releases the lock acquired of the passed transaction.
+func (a *Service) Release(ctx context.Context, tx Transaction) {
+	a.metrics.ReleasesTotal.Add(1)
+	a.auditDB.ReleaseLocks(ctx, string(tx.Request().Anchor))
+}
+
+// AppendRecord stores the audit record for the passed transaction. Behaves
+// like Append but accepts a pre-computed AuditRecord, allowing the caller
+// to skip a second AuditRecord computation on the request. The
+// completeInputsWithEmptyEID step still runs since it depends on tms.Vault
+// state, not on the wrapper's owner.
+func (a *Service) AppendRecord(ctx context.Context, tx Transaction, record *token.AuditRecord) error {
+	return a.appendImpl(ctx, tx, record)
+}
+
+func (a *Service) appendImpl(ctx context.Context, tx Transaction, cachedRecord *token.AuditRecord) error {
 	start := time.Now()
 	defer func() { a.metrics.AppendDuration.Observe(time.Since(start).Seconds()) }()
 	defer a.Release(ctx, tx)
@@ -149,9 +168,13 @@ func (a *Service) Append(ctx context.Context, tx Transaction) error {
 	if err != nil {
 		return err
 	}
+	wrapper := newRequestWrapper(tx.Request(), tms)
+	if cachedRecord != nil {
+		wrapper.cached = cachedRecord
+	}
 	// append request to audit db
 	if err := runPhase(ctx, "av_append_db", func(c context.Context) error {
-		return a.auditDB.Append(c, newRequestWrapper(tx.Request(), tms))
+		return a.auditDB.Append(c, wrapper)
 	}); err != nil {
 		a.metrics.AppendErrors.Add(1)
 
@@ -182,23 +205,6 @@ func (a *Service) Append(ctx context.Context, tx Transaction) error {
 	logger.DebugfContext(ctx, "append done for request [%s]", tx.ID())
 
 	return nil
-}
-
-// Release releases the lock acquired of the passed transaction.
-func (a *Service) Release(ctx context.Context, tx Transaction) {
-	a.metrics.ReleasesTotal.Add(1)
-	a.auditDB.ReleaseLocks(ctx, string(tx.Request().Anchor))
-}
-
-// AppendRecord stores the audit record for the passed transaction. Behaves
-// like Append but accepts a pre-computed AuditRecord, allowing the caller
-// to skip a second AuditRecord computation on the request.
-//
-// Reapplied stub: the upstream Append path re-derives the record internally
-// via newRequestWrapper.AuditRecord — perf gain over Append is lost in this
-// stub, but functional behavior matches.
-func (a *Service) AppendRecord(ctx context.Context, tx Transaction, _ *token.AuditRecord) error {
-	return a.Append(ctx, tx)
 }
 
 // SumHoldingsByEnrollmentID returns the per-EID balance (pending+confirmed)
@@ -261,6 +267,12 @@ func (a *Service) Check(ctx context.Context) ([]string, error) {
 type requestWrapper struct {
 	r   *token.Request
 	tms dep.TokenManagementService
+	// cached holds an AuditRecord pre-computed by the caller (e.g.
+	// audit_gated.av_audit_record). When non-nil, AuditRecord() skips
+	// re-running r.r.AuditRecord(ctx) but still runs completeInputsWithEmptyEID
+	// because that depends on tms.Vault state and may differ between caller
+	// and store evaluation contexts.
+	cached *token.AuditRecord
 }
 
 func newRequestWrapper(r *token.Request, tms dep.TokenManagementService) *requestWrapper {
@@ -280,9 +292,13 @@ func (r *requestWrapper) AllApplicationMetadata() map[string][]byte {
 func (r *requestWrapper) PublicParamsHash() token.PPHash { return r.r.PublicParamsHash() }
 
 func (r *requestWrapper) AuditRecord(ctx context.Context) (*token.AuditRecord, error) {
-	record, err := r.r.AuditRecord(ctx)
-	if err != nil {
-		return nil, err
+	record := r.cached
+	if record == nil {
+		var err error
+		record, err = r.r.AuditRecord(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if err := r.completeInputsWithEmptyEID(ctx, record); err != nil {
 		return nil, errors.WithMessagef(err, "failed filling gaps for request [%s]", r.r.Anchor)

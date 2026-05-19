@@ -3,14 +3,29 @@ package mock
 
 import (
 	"context"
+	"math/big"
 	"sync"
 
 	"github.com/hyperledger-labs/fabric-token-sdk/token"
 	auditora "github.com/hyperledger-labs/fabric-token-sdk/token/services/auditor"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/ttx/dep/auditor"
+	tokena "github.com/hyperledger-labs/fabric-token-sdk/token/token"
 )
 
 type AuditService struct {
+	AppendRecordStub        func(context.Context, auditora.Transaction, *token.AuditRecord) error
+	appendRecordMutex       sync.RWMutex
+	appendRecordArgsForCall []struct {
+		arg1 context.Context
+		arg2 auditora.Transaction
+		arg3 *token.AuditRecord
+	}
+	appendRecordReturns struct {
+		result1 error
+	}
+	appendRecordReturnsOnCall map[int]struct {
+		result1 error
+	}
 	AuditStub        func(context.Context, auditora.Transaction) (*token.InputStream, *token.OutputStream, error)
 	auditMutex       sync.RWMutex
 	auditArgsForCall []struct {
@@ -60,6 +75,21 @@ type AuditService struct {
 		arg1 context.Context
 		arg2 auditora.Transaction
 	}
+	SumHoldingsByEnrollmentIDStub        func(context.Context, []string, []tokena.Type) (map[string]*big.Int, error)
+	sumHoldingsByEnrollmentIDMutex       sync.RWMutex
+	sumHoldingsByEnrollmentIDArgsForCall []struct {
+		arg1 context.Context
+		arg2 []string
+		arg3 []tokena.Type
+	}
+	sumHoldingsByEnrollmentIDReturns struct {
+		result1 map[string]*big.Int
+		result2 error
+	}
+	sumHoldingsByEnrollmentIDReturnsOnCall map[int]struct {
+		result1 map[string]*big.Int
+		result2 error
+	}
 	ValidateStub        func(context.Context, *token.Request) error
 	validateMutex       sync.RWMutex
 	validateArgsForCall []struct {
@@ -74,6 +104,69 @@ type AuditService struct {
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
+}
+
+func (fake *AuditService) AppendRecord(arg1 context.Context, arg2 auditora.Transaction, arg3 *token.AuditRecord) error {
+	fake.appendRecordMutex.Lock()
+	ret, specificReturn := fake.appendRecordReturnsOnCall[len(fake.appendRecordArgsForCall)]
+	fake.appendRecordArgsForCall = append(fake.appendRecordArgsForCall, struct {
+		arg1 context.Context
+		arg2 auditora.Transaction
+		arg3 *token.AuditRecord
+	}{arg1, arg2, arg3})
+	stub := fake.AppendRecordStub
+	fakeReturns := fake.appendRecordReturns
+	fake.recordInvocation("AppendRecord", []interface{}{arg1, arg2, arg3})
+	fake.appendRecordMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2, arg3)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *AuditService) AppendRecordCallCount() int {
+	fake.appendRecordMutex.RLock()
+	defer fake.appendRecordMutex.RUnlock()
+	return len(fake.appendRecordArgsForCall)
+}
+
+func (fake *AuditService) AppendRecordCalls(stub func(context.Context, auditora.Transaction, *token.AuditRecord) error) {
+	fake.appendRecordMutex.Lock()
+	defer fake.appendRecordMutex.Unlock()
+	fake.AppendRecordStub = stub
+}
+
+func (fake *AuditService) AppendRecordArgsForCall(i int) (context.Context, auditora.Transaction, *token.AuditRecord) {
+	fake.appendRecordMutex.RLock()
+	defer fake.appendRecordMutex.RUnlock()
+	argsForCall := fake.appendRecordArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
+}
+
+func (fake *AuditService) AppendRecordReturns(result1 error) {
+	fake.appendRecordMutex.Lock()
+	defer fake.appendRecordMutex.Unlock()
+	fake.AppendRecordStub = nil
+	fake.appendRecordReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *AuditService) AppendRecordReturnsOnCall(i int, result1 error) {
+	fake.appendRecordMutex.Lock()
+	defer fake.appendRecordMutex.Unlock()
+	fake.AppendRecordStub = nil
+	if fake.appendRecordReturnsOnCall == nil {
+		fake.appendRecordReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.appendRecordReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
 }
 
 func (fake *AuditService) Audit(arg1 context.Context, arg2 auditora.Transaction) (*token.InputStream, *token.OutputStream, error) {
@@ -306,6 +399,82 @@ func (fake *AuditService) ReleaseArgsForCall(i int) (context.Context, auditora.T
 	return argsForCall.arg1, argsForCall.arg2
 }
 
+func (fake *AuditService) SumHoldingsByEnrollmentID(arg1 context.Context, arg2 []string, arg3 []tokena.Type) (map[string]*big.Int, error) {
+	var arg2Copy []string
+	if arg2 != nil {
+		arg2Copy = make([]string, len(arg2))
+		copy(arg2Copy, arg2)
+	}
+	var arg3Copy []tokena.Type
+	if arg3 != nil {
+		arg3Copy = make([]tokena.Type, len(arg3))
+		copy(arg3Copy, arg3)
+	}
+	fake.sumHoldingsByEnrollmentIDMutex.Lock()
+	ret, specificReturn := fake.sumHoldingsByEnrollmentIDReturnsOnCall[len(fake.sumHoldingsByEnrollmentIDArgsForCall)]
+	fake.sumHoldingsByEnrollmentIDArgsForCall = append(fake.sumHoldingsByEnrollmentIDArgsForCall, struct {
+		arg1 context.Context
+		arg2 []string
+		arg3 []tokena.Type
+	}{arg1, arg2Copy, arg3Copy})
+	stub := fake.SumHoldingsByEnrollmentIDStub
+	fakeReturns := fake.sumHoldingsByEnrollmentIDReturns
+	fake.recordInvocation("SumHoldingsByEnrollmentID", []interface{}{arg1, arg2Copy, arg3Copy})
+	fake.sumHoldingsByEnrollmentIDMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2, arg3)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *AuditService) SumHoldingsByEnrollmentIDCallCount() int {
+	fake.sumHoldingsByEnrollmentIDMutex.RLock()
+	defer fake.sumHoldingsByEnrollmentIDMutex.RUnlock()
+	return len(fake.sumHoldingsByEnrollmentIDArgsForCall)
+}
+
+func (fake *AuditService) SumHoldingsByEnrollmentIDCalls(stub func(context.Context, []string, []tokena.Type) (map[string]*big.Int, error)) {
+	fake.sumHoldingsByEnrollmentIDMutex.Lock()
+	defer fake.sumHoldingsByEnrollmentIDMutex.Unlock()
+	fake.SumHoldingsByEnrollmentIDStub = stub
+}
+
+func (fake *AuditService) SumHoldingsByEnrollmentIDArgsForCall(i int) (context.Context, []string, []tokena.Type) {
+	fake.sumHoldingsByEnrollmentIDMutex.RLock()
+	defer fake.sumHoldingsByEnrollmentIDMutex.RUnlock()
+	argsForCall := fake.sumHoldingsByEnrollmentIDArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
+}
+
+func (fake *AuditService) SumHoldingsByEnrollmentIDReturns(result1 map[string]*big.Int, result2 error) {
+	fake.sumHoldingsByEnrollmentIDMutex.Lock()
+	defer fake.sumHoldingsByEnrollmentIDMutex.Unlock()
+	fake.SumHoldingsByEnrollmentIDStub = nil
+	fake.sumHoldingsByEnrollmentIDReturns = struct {
+		result1 map[string]*big.Int
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *AuditService) SumHoldingsByEnrollmentIDReturnsOnCall(i int, result1 map[string]*big.Int, result2 error) {
+	fake.sumHoldingsByEnrollmentIDMutex.Lock()
+	defer fake.sumHoldingsByEnrollmentIDMutex.Unlock()
+	fake.SumHoldingsByEnrollmentIDStub = nil
+	if fake.sumHoldingsByEnrollmentIDReturnsOnCall == nil {
+		fake.sumHoldingsByEnrollmentIDReturnsOnCall = make(map[int]struct {
+			result1 map[string]*big.Int
+			result2 error
+		})
+	}
+	fake.sumHoldingsByEnrollmentIDReturnsOnCall[i] = struct {
+		result1 map[string]*big.Int
+		result2 error
+	}{result1, result2}
+}
+
 func (fake *AuditService) Validate(arg1 context.Context, arg2 *token.Request) error {
 	fake.validateMutex.Lock()
 	ret, specificReturn := fake.validateReturnsOnCall[len(fake.validateArgsForCall)]
@@ -371,16 +540,6 @@ func (fake *AuditService) ValidateReturnsOnCall(i int, result1 error) {
 func (fake *AuditService) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.auditMutex.RLock()
-	defer fake.auditMutex.RUnlock()
-	fake.checkMutex.RLock()
-	defer fake.checkMutex.RUnlock()
-	fake.getTokenRequestMutex.RLock()
-	defer fake.getTokenRequestMutex.RUnlock()
-	fake.releaseMutex.RLock()
-	defer fake.releaseMutex.RUnlock()
-	fake.validateMutex.RLock()
-	defer fake.validateMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value
