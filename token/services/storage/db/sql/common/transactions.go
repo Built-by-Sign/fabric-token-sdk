@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/go-uuid"
+	"github.com/google/uuid"
 	"github.com/hyperledger-labs/fabric-smart-client/pkg/utils/errors"
 	driver3 "github.com/hyperledger-labs/fabric-smart-client/platform/common/driver"
 	"github.com/hyperledger-labs/fabric-smart-client/platform/common/utils/collections/iterators"
@@ -30,6 +30,7 @@ import (
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/logging"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/storage"
 	dbdriver "github.com/hyperledger-labs/fabric-token-sdk/token/services/storage/db/driver"
+	"github.com/hyperledger-labs/fabric-token-sdk/token/services/utils/phase"
 )
 
 // maxAmountBits is the maximum bit length supported by NUMERIC(78, 0).
@@ -381,10 +382,11 @@ func (db *TransactionStore) AddTransactionEndorsementAck(ctx context.Context, tx
 	logger.DebugfContext(ctx, "adding transaction endorse ack record [%s]", txID)
 
 	now := time.Now().UTC()
-	id, err := uuid.GenerateUUID()
+	uuidV7, err := uuid.NewV7()
 	if err != nil {
 		return errors.Wrapf(err, "error generating uuid")
 	}
+	id := uuidV7.String()
 	query, args := q.InsertInto(db.table.TransactionEndorseAck).
 		Fields("id", "tx_id", "endorser", "sigma", "stored_at").
 		Row(id, txID, endorser, sigma, now).
@@ -534,7 +536,12 @@ func (db *TransactionStore) GetSchema() string {
 }
 
 func (db *TransactionStore) NewTransactionStoreTransaction() (dbdriver.TransactionStoreTransaction, error) {
+	beginStart := time.Now()
 	txn, err := db.writeDB.Begin()
+	// NewTransactionStoreTransaction is part of the driver interface and does not
+	// accept a ctx (caller's trace is already broken at Begin). The histogram
+	// only keys on the phase attribute, so context.Background() is sufficient.
+	phase.Record(context.Background(), "av_append_db_begin", beginStart)
 	if err != nil {
 		return nil, err
 	}
@@ -584,14 +591,14 @@ func (w *TransactionStoreTransaction) AddTransaction(ctx context.Context, rs ...
 	rows := make([]common3.Tuple, len(rs))
 	for i, r := range rs {
 		logger.DebugfContext(ctx, "adding transaction record [%s:%d,%s:%s:%s:%s]", r.TxID, r.ActionType, r.TokenType, r.SenderEID, r.RecipientEID, r.Amount)
-		id, err := uuid.GenerateUUID()
+		uuidV7, err := uuid.NewV7()
 		if err != nil {
 			return errors.Wrapf(err, "error generating uuid")
 		}
 		if r.Amount.BitLen() > maxAmountBits {
 			return errors.Errorf("amount [%s] exceeds maximum supported size of %d bits", r.Amount, maxAmountBits)
 		}
-		rows[i] = common3.Tuple{id, r.TxID, int(r.ActionType), r.SenderEID, r.RecipientEID, r.TokenType, r.Amount.String(), r.Timestamp.UTC()}
+		rows[i] = common3.Tuple{uuidV7.String(), r.TxID, int(r.ActionType), r.SenderEID, r.RecipientEID, r.TokenType, r.Amount.String(), r.Timestamp.UTC()}
 	}
 
 	query, args := q.InsertInto(w.table.Transactions).
@@ -599,6 +606,7 @@ func (w *TransactionStoreTransaction) AddTransaction(ctx context.Context, rs ...
 		Rows(rows).
 		Format()
 	logging.Debug(logger, query, args)
+	phase.Counter(ctx, "av_append_transaction_count", int64(len(rs)))
 	_, err := w.txn.ExecContext(ctx, query, args...)
 
 	return ttxDBError(err)
@@ -647,14 +655,14 @@ func (w *TransactionStoreTransaction) AddMovement(ctx context.Context, rs ...dbd
 	rows := make([]common3.Tuple, len(rs))
 	for i, r := range rs {
 		logger.DebugfContext(ctx, "adding movement record [%s]", r)
-		id, err := uuid.GenerateUUID()
+		uuidV7, err := uuid.NewV7()
 		if err != nil {
 			return errors.Wrapf(err, "error generating uuid")
 		}
 		if r.Amount.BitLen() > maxAmountBits {
 			return errors.Errorf("amount [%s] exceeds maximum supported size of %d bits", r.Amount, maxAmountBits)
 		}
-		rows[i] = common3.Tuple{id, r.TxID, r.EnrollmentID, r.TokenType, r.Amount.String(), now}
+		rows[i] = common3.Tuple{uuidV7.String(), r.TxID, r.EnrollmentID, r.TokenType, r.Amount.String(), now}
 	}
 
 	query, args := q.InsertInto(w.table.Movements).
@@ -662,6 +670,7 @@ func (w *TransactionStoreTransaction) AddMovement(ctx context.Context, rs ...dbd
 		Rows(rows).
 		Format()
 	logging.Debug(logger, query, args)
+	phase.Counter(ctx, "av_append_movement_count", int64(len(rs)))
 	_, err := w.txn.ExecContext(ctx, query, args...)
 
 	return ttxDBError(err)
