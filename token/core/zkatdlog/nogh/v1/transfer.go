@@ -8,6 +8,7 @@ package v1
 
 import (
 	"context"
+	"time"
 
 	math "github.com/IBM/mathlib"
 	"github.com/hyperledger-labs/fabric-smart-client/pkg/utils/errors"
@@ -21,6 +22,16 @@ import (
 	token2 "github.com/hyperledger-labs/fabric-token-sdk/token/token"
 	"go.opentelemetry.io/otel/trace"
 )
+
+// recordTransferPhase emits a sub-phase timing if a recorder is attached to
+// ctx via driver.WithTransferPhaseRecorder. Used to break down the otherwise
+// opaque req_compute_transfer umbrella into load / prepare / ZK / audit
+// components that observability can plot independently.
+func recordTransferPhase(ctx context.Context, phase string, start time.Time) {
+	if rec := driver.TransferPhaseRecorderFrom(ctx); rec != nil {
+		rec(ctx, phase, time.Since(start))
+	}
+}
 
 // LoadedToken is a type alias for a loaded token containing the token content and its metadata.
 type LoadedToken = common.LoadedToken[[]byte, []byte]
@@ -124,12 +135,16 @@ func (s *TransferService) Transfer(ctx context.Context, anchor driver.TokenReque
 	}
 
 	// 1. Load tokens with the passed token identifiers from the vault.
+	loadStart := time.Now()
 	loadedTokens, err := s.TokenLoader.LoadTokens(ctx, ids)
+	recordTransferPhase(ctx, "req_compute_load_tokens", loadStart)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to load tokens")
 	}
 	// 2. Deserialize the loaded tokens into a format usable for generating the ZK proof.
+	prepStart := time.Now()
 	prepareInputs, err := s.prepareInputs(ctx, loadedTokens)
+	recordTransferPhase(ctx, "req_compute_prepare_inputs", prepStart)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to prepare inputs")
 	}
@@ -159,7 +174,9 @@ func (s *TransferService) Transfer(ctx context.Context, anchor driver.TokenReque
 	}
 	// 5. Generate the ZK-SNARK transfer action and the metadata for the new outputs.
 	s.Logger.DebugfContext(ctx, "Generate zk transfer")
+	zkStart := time.Now()
 	transfer, outputsMetadata, err := sender.GenerateZKTransfer(ctx, values, owners)
+	recordTransferPhase(ctx, "req_compute_zk_transfer", zkStart)
 	s.Logger.DebugfContext(ctx, "Done generating zk transfer")
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to generate zkatdlog transfer action for txid [%s]", anchor)
@@ -177,6 +194,7 @@ func (s *TransferService) Transfer(ctx context.Context, anchor driver.TokenReque
 	// 7. Prepare the TransferMetadata which contains audit information for auditors.
 	ws := s.AuditInfoProvider
 
+	inputAuditStart := time.Now()
 	var transferInputsMetadata []*driver.TransferInputMetadata
 	tokens := prepareInputs.Tokens()
 	senderAuditInfos := make([][]byte, 0, len(tokens))
@@ -198,7 +216,9 @@ func (s *TransferService) Transfer(ctx context.Context, anchor driver.TokenReque
 			},
 		})
 	}
+	recordTransferPhase(ctx, "req_compute_input_audit", inputAuditStart)
 
+	outputAuditStart := time.Now()
 	var transferOutputsMetadata []*driver.TransferOutputMetadata
 	for i, output := range outputs {
 		var outputAudiInfo []byte
@@ -248,6 +268,7 @@ func (s *TransferService) Transfer(ctx context.Context, anchor driver.TokenReque
 			Receivers:       outputReceivers,
 		})
 	}
+	recordTransferPhase(ctx, "req_compute_output_audit", outputAuditStart)
 
 	s.Logger.DebugfContext(ctx, "Transfer Action Prepared [id:%s,ins:%d:%d,outs:%d]", anchor, len(ids), len(senderAuditInfos), transfer.NumOutputs())
 

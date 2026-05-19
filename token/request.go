@@ -388,10 +388,25 @@ func (r *Request) Transfer(ctx context.Context, wallet *OwnerWallet, typ token.T
 
 	ts := r.TokenService.tms.TransferService()
 
+	// Propagate the phase recorder to the driver via ctx so the driver can
+	// emit its own sub-phase timings (load tokens, prepare inputs, ZK proof,
+	// audit info) without each driver having to grow its own option surface.
+	// driver.TransferPhaseRecorder shares the same signature as
+	// TransferPhaseRecorder defined here; cast through a small adapter to
+	// avoid coupling the two named types.
+	computeCtx := ctx
+	if rec != nil {
+		computeCtx = driver.WithTransferPhaseRecorder(ctx,
+			func(c context.Context, phase string, dur time.Duration) {
+				rec(c, phase, dur)
+			},
+		)
+	}
+
 	// Compute transfer
 	computeStart := time.Now()
 	transfer, transferMetadata, err := ts.Transfer(
-		ctx,
+		computeCtx,
 		r.Anchor,
 		wallet.w,
 		tokenIDs,
