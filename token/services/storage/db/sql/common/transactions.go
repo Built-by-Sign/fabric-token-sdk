@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/hashicorp/go-uuid"
 	"github.com/hyperledger-labs/fabric-smart-client/pkg/utils/errors"
 	driver3 "github.com/hyperledger-labs/fabric-smart-client/platform/common/driver"
 	"github.com/hyperledger-labs/fabric-smart-client/platform/common/utils/collections/iterators"
@@ -382,11 +382,10 @@ func (db *TransactionStore) AddTransactionEndorsementAck(ctx context.Context, tx
 	logger.DebugfContext(ctx, "adding transaction endorse ack record [%s]", txID)
 
 	now := time.Now().UTC()
-	uuidV7, err := uuid.NewV7()
+	id, err := uuid.GenerateUUID()
 	if err != nil {
 		return errors.Wrapf(err, "error generating uuid")
 	}
-	id := uuidV7.String()
 	query, args := q.InsertInto(db.table.TransactionEndorseAck).
 		Fields("id", "tx_id", "endorser", "sigma", "stored_at").
 		Row(id, txID, endorser, sigma, now).
@@ -591,14 +590,14 @@ func (w *TransactionStoreTransaction) AddTransaction(ctx context.Context, rs ...
 	rows := make([]common3.Tuple, len(rs))
 	for i, r := range rs {
 		logger.DebugfContext(ctx, "adding transaction record [%s:%d,%s:%s:%s:%s]", r.TxID, r.ActionType, r.TokenType, r.SenderEID, r.RecipientEID, r.Amount)
-		uuidV7, err := uuid.NewV7()
+		id, err := uuid.GenerateUUID()
 		if err != nil {
 			return errors.Wrapf(err, "error generating uuid")
 		}
 		if r.Amount.BitLen() > maxAmountBits {
 			return errors.Errorf("amount [%s] exceeds maximum supported size of %d bits", r.Amount, maxAmountBits)
 		}
-		rows[i] = common3.Tuple{uuidV7.String(), r.TxID, int(r.ActionType), r.SenderEID, r.RecipientEID, r.TokenType, r.Amount.String(), r.Timestamp.UTC()}
+		rows[i] = common3.Tuple{id, r.TxID, int(r.ActionType), r.SenderEID, r.RecipientEID, r.TokenType, r.Amount.String(), r.Timestamp.UTC()}
 	}
 
 	query, args := q.InsertInto(w.table.Transactions).
@@ -655,14 +654,14 @@ func (w *TransactionStoreTransaction) AddMovement(ctx context.Context, rs ...dbd
 	rows := make([]common3.Tuple, len(rs))
 	for i, r := range rs {
 		logger.DebugfContext(ctx, "adding movement record [%s]", r)
-		uuidV7, err := uuid.NewV7()
+		id, err := uuid.GenerateUUID()
 		if err != nil {
 			return errors.Wrapf(err, "error generating uuid")
 		}
 		if r.Amount.BitLen() > maxAmountBits {
 			return errors.Errorf("amount [%s] exceeds maximum supported size of %d bits", r.Amount, maxAmountBits)
 		}
-		rows[i] = common3.Tuple{uuidV7.String(), r.TxID, r.EnrollmentID, r.TokenType, r.Amount.String(), now}
+		rows[i] = common3.Tuple{id, r.TxID, r.EnrollmentID, r.TokenType, r.Amount.String(), now}
 	}
 
 	query, args := q.InsertInto(w.table.Movements).
