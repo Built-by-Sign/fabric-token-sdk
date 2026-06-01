@@ -180,10 +180,10 @@ type LocalMembership struct {
 	// pass against a non-local label re-takes the write lock and reloads
 	// stored identity configurations from PG; on a busy auditor that
 	// serialises every audit on a single mutex.
-	localIdentitiesNegative   map[string]struct{}
-	targetIdentities          []view.Identity // optional list of identities to prefer
-	anonymous                 bool            // when true, only anonymous identities are considered selectable by default
-	closeOnce                 sync.Once
+	localIdentitiesNegative map[string]struct{}
+	targetIdentities        []view.Identity // optional list of identities to prefer
+	anonymous               bool            // when true, only anonymous identities are considered selectable by default
+	closeOnce               sync.Once
 }
 
 // NewLocalMembership creates a new LocalMembership instance.
@@ -925,7 +925,7 @@ func (t *TypedSignerDeserializer) DeserializeSigner(ctx context.Context, _ idriv
 	return t.KeyManager.DeserializeSigner(ctx, raw)
 }
 
-func marshalOpts(opts interface{}) (optsRaw []byte, err error) {
+func marshalOpts(opts any) (optsRaw []byte, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = errors.Errorf("panic caught while marshalling identity options: %v", r)

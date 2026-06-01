@@ -11,7 +11,8 @@ import (
 
 	scommon "github.com/hyperledger-labs/fabric-smart-client/platform/view/services/storage/driver/common"
 	"github.com/hyperledger-labs/fabric-smart-client/platform/view/services/storage/driver/sql/common"
-	"github.com/hyperledger-labs/fabric-smart-client/platform/view/services/storage/driver/sql/postgres"
+
+	fscPostgres "github.com/hyperledger-labs/fabric-smart-client/platform/view/services/storage/driver/sql/postgres"
 	idriver "github.com/hyperledger-labs/fabric-token-sdk/token/services/identity/driver"
 	sqlcommon "github.com/hyperledger-labs/fabric-token-sdk/token/services/storage/db/sql/common"
 )
@@ -48,8 +49,8 @@ func NewIdentityStore(dbs *scommon.RWDB, tableNames sqlcommon.TableNames, dataSo
 		tableNames,
 		sqlcommon.NewSignerInfoCache(),
 		sqlcommon.NewSyncMapCache[[]byte](),
-		postgres.NewConditionInterpreter(),
-		&postgres.ErrorMapper{},
+		NewConditionInterpreter(),
+		&fscPostgres.ErrorMapper{},
 		notifier,
 	)
 	if err != nil {

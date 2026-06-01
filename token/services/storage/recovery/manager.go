@@ -33,34 +33,13 @@ const (
 // Storage defines the interface for querying pending transactions and transaction details
 type Storage interface {
 	AcquireRecoveryLeadership(ctx context.Context, lockID int64) (Leadership, bool, error)
-	ClaimPendingTransactions(ctx context.Context, olderThan time.Duration, leaseDuration time.Duration, limit int, owner string) ([]*ttxdb.TransactionRecord, error)
+	ClaimPendingTransactions(ctx context.Context, olderThan time.Duration, leaseDuration time.Duration, limit int, owner string) ([]*ttxdb.RecoveryClaim, error)
 	ReleaseRecoveryClaim(ctx context.Context, txID string, owner string, message string) error
-	// SetStatus promotes a transaction whose recovery keeps returning NotFound
-	// past the grace period to a final status (Deleted), preventing it from
-	// blocking the sweep queue forever. Added by fork PR #12 — without this,
-	// orphan tx_ids stayed Pending forever and tied up worker slots.
+	// SetStatus updates a transaction's status row. Used by the recovery loop to
+	// permanently mark orphan transactions (NotFound past grace period) as Orphan
+	// so they exit the eligible scan range and stop blocking the queue head,
+	// while remaining distinguishable from txs the ledger actively rejected.
 	SetStatus(ctx context.Context, txID string, status storage.TxStatus, message string) error
-}
-
-// recoveryItem carries a single tx through the worker pool. StoredAt is
-// needed for the NotFoundGracePeriod check, so the work channel can no
-// longer be a bare chan string.
-type recoveryItem struct {
-	TxID     string
-	StoredAt time.Time
-}
-
-// isNotFoundError matches the error patterns we see when a tx_id is not
-// known to the orderer / committer side. Pattern set comes from dev log
-// inspection — obsidian "CBDC 压测优化迭代 2026-05-14" §3.3.
-func isNotFoundError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "code = NotFound") ||
-		strings.Contains(msg, "not found in index") ||
-		strings.Contains(msg, "tx not found")
 }
 
 //go:generate counterfeiter -o mock/handler.go -fake-name Handler . Handler
@@ -257,7 +236,7 @@ func (m *Manager) recoverTransactions(ctx context.Context) error {
 
 	m.logger.Infof("claimed %d pending transaction(s) needing recovery", len(records))
 
-	work := make(chan recoveryItem)
+	work := make(chan *ttxdb.RecoveryClaim)
 	errCh := make(chan error, len(records))
 	var workerWG sync.WaitGroup
 
@@ -266,20 +245,15 @@ func (m *Manager) recoverTransactions(ctx context.Context) error {
 		go m.worker(ctx, &workerWG, work, errCh)
 	}
 
-	// seen dedups txIDs that appear multiple times in a single batch — e.g.
-	// the claim query returns the same tx multiple times when reads cross
-	// a lease-expiry boundary. Without this the same tx could be processed
-	// by two workers concurrently (obsidian 2026-05-14 §3.2 codex review #1).
-	seen := make(map[string]time.Time, len(records))
-	for _, record := range records {
-		if record == nil {
+	// ClaimPendingTransactions reads directly from the requests table where
+	// tx_id is the primary key, so each claim is already unique. Fan out
+	// straight to the workers; nil entries are defensive but should never
+	// occur in practice.
+	for _, claim := range records {
+		if claim == nil {
 			continue
 		}
-		if _, dup := seen[record.TxID]; dup {
-			continue
-		}
-		seen[record.TxID] = record.Timestamp
-		work <- recoveryItem{TxID: record.TxID, StoredAt: record.Timestamp}
+		work <- claim
 	}
 	close(work)
 
@@ -309,18 +283,18 @@ func (m *Manager) recoverTransactions(ctx context.Context) error {
 	return firstErr
 }
 
-func (m *Manager) worker(ctx context.Context, wg *sync.WaitGroup, work <-chan recoveryItem, errCh chan<- error) {
+func (m *Manager) worker(ctx context.Context, wg *sync.WaitGroup, work <-chan *ttxdb.RecoveryClaim, errCh chan<- error) {
 	defer wg.Done()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case item, ok := <-work:
+		case claim, ok := <-work:
 			if !ok {
 				return
 			}
-			if err := m.recoverTransaction(ctx, item.TxID, item.StoredAt); err != nil {
+			if err := m.recoverTransaction(ctx, claim.TxID, claim.StoredAt); err != nil {
 				errCh <- err
 			}
 		}
@@ -330,43 +304,50 @@ func (m *Manager) worker(ctx context.Context, wg *sync.WaitGroup, work <-chan re
 // recoverTransaction attempts to recover a transaction using the injected handler
 // and always releases the claim with an appropriate message.
 //
-// If the handler returns a NotFound-shaped error and the row's stored_at
-// is older than NotFoundGracePeriod, the transaction is promoted to
-// Deleted via storage.SetStatus so the queue can move past it instead
-// of re-claiming it forever. StoredAt zero values skip the promotion
-// (defensive: if the claim record didn't carry a timestamp, we can't
-// safely decide that enough time has passed — codex review #4, obsidian
-// 2026-05-14 §3.2).
+// If the handler reports the transaction is not on the ledger and the row was
+// stored more than NotFoundGracePeriod ago, the row is force-marked Orphan to
+// prevent the queue head from being permanently blocked by transactions that
+// never reached the ledger (e.g. broadcast failures whose audit log was
+// persisted but whose tx never reached the orderer). Without this,
+// ORDER BY stored_at ASC + LIMIT BatchSize would replay the same oldest-100
+// rows on every sweep forever. The status is deliberately distinct from
+// Deleted so operators and downstream tooling can tell broadcast losses apart
+// from txs the ledger actively rejected.
 func (m *Manager) recoverTransaction(ctx context.Context, txID string, storedAt time.Time) error {
 	m.logger.Debugf("recovering transaction [%s]", txID)
 
 	// Attempt recovery using the injected handler
 	err := m.handler.Recover(ctx, txID)
 
-	// NotFound + past grace period → force-promote to Deleted to unblock
-	// the sweep queue. We promote BEFORE releasing the claim so the
-	// SetStatus is observed under the lease (avoids racing with a parallel
-	// committer-side late-arrival).
-	if err != nil &&
-		m.config.NotFoundGracePeriod > 0 &&
-		!storedAt.IsZero() &&
-		time.Since(storedAt) > m.config.NotFoundGracePeriod &&
-		isNotFoundError(err) {
-		setErr := m.storage.SetStatus(ctx, txID, storage.Deleted,
-			fmt.Sprintf("recovery: NotFound past grace period of %s", m.config.NotFoundGracePeriod))
-		if setErr != nil {
-			m.logger.Warnf("failed to promote orphan tx [%s] to Deleted: %v", txID, setErr)
-		} else {
-			m.logger.Infof("promoted orphan tx [%s] (stored_at=%s) to Deleted after %s NotFound",
-				txID, storedAt.Format(time.RFC3339), time.Since(storedAt).Round(time.Second))
+	// Residual race: SetStatus is unconditional, so an independent finality
+	// listener that confirms this tx between our claim and the write below
+	// could be overwritten by Orphan. In practice the NotFoundGracePeriod
+	// (default 30 min) makes this window vanishingly small — we only get
+	// here when the tx has been Pending for grace+ AND Recover just returned
+	// NotFound. Future hardening: replace SetStatus with an atomic
+	// "status=Pending → Orphan" CAS at the SQL layer.
+	markedOrphan := false
+	if err != nil && m.config.NotFoundGracePeriod > 0 && !storedAt.IsZero() && isNotFoundError(err) {
+		age := time.Since(storedAt)
+		if age > m.config.NotFoundGracePeriod {
+			orphanMsg := fmt.Sprintf("tx never reached ledger (NotFound after %v, grace=%v)", age.Truncate(time.Second), m.config.NotFoundGracePeriod)
+			m.logger.Warnf("recovery: marking tx [%s] as Orphan: %s", txID, orphanMsg)
+			if setErr := m.storage.SetStatus(ctx, txID, storage.Orphan, orphanMsg); setErr != nil {
+				m.logger.Errorf("recovery: failed to mark tx [%s] Orphan: %v", txID, setErr)
+			} else {
+				markedOrphan = true
+			}
 		}
 	}
 
 	// Always release the claim with appropriate message
 	var message string
-	if err != nil {
+	switch {
+	case markedOrphan:
+		message = "tx marked Orphan after NotFound grace period"
+	case err != nil:
 		message = fmt.Sprintf("recovery failed: %v", err)
-	} else {
+	default:
 		message = "recovered successfully"
 	}
 
@@ -374,13 +355,55 @@ func (m *Manager) recoverTransaction(ctx context.Context, txID string, storedAt 
 		m.logger.Warnf("failed to release recovery claim for transaction [%s]: %v", txID, releaseErr)
 	}
 
-	if err != nil {
+	if err != nil && !markedOrphan {
 		return errors.Wrapf(err, "failed to recover transaction [%s]", txID)
+	}
+
+	if markedOrphan {
+		// Treat as resolved — no need to noisily report a "failure" the next sweep
+		// would otherwise re-encounter (the row is now Orphan and ineligible for
+		// the Pending-only claim filter).
+		return nil
 	}
 
 	m.logger.Infof("successfully recovered transaction [%s]", txID)
 
 	return nil
+}
+
+// isNotFoundError reports whether err looks like a "transaction not found on
+// ledger" failure surfaced from the recovery handler path. Matching by string
+// is intentionally loose so the recovery loop does not pull grpc/codes or
+// the network/fabric finality wrappers into its dependency surface; upstream
+// wraps these statuses with errors.Wrapf so the substrings survive.
+//
+// Patterns covered (verified against the dev environment runtime error
+//
+//		"rpc error: code = NotFound desc = transaction ID [X]: not found in
+//		  index: tx not found"):
+//
+//	  - "code = NotFound"     — raw gRPC status text
+//	  - "not found in index"  — committer's gRPC status desc field
+//	  - "tx not found"        — FSC finality.TxNotFound sentinel appended
+//	    by fabric-x ledger.GetTransactionByID
+//	    (fabric-smart-client/platform/fabricx/core/ledger/ledger.go:64).
+//	    Stable across committer error format changes since the sentinel
+//	    is wrapped at the FSC layer, above the committer's gRPC text.
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "code = NotFound"):
+		return true
+	case strings.Contains(msg, "not found in index"):
+		return true
+	case strings.Contains(msg, "tx not found"):
+		return true
+	}
+
+	return false
 }
 
 func (m *Manager) releaseClaim(ctx context.Context, txID string, message string) error {

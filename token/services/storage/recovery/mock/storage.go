@@ -28,7 +28,7 @@ type Storage struct {
 		result2 bool
 		result3 error
 	}
-	ClaimPendingTransactionsStub        func(context.Context, time.Duration, time.Duration, int, string) ([]*ttxdb.TransactionRecord, error)
+	ClaimPendingTransactionsStub        func(context.Context, time.Duration, time.Duration, int, string) ([]*ttxdb.RecoveryClaim, error)
 	claimPendingTransactionsMutex       sync.RWMutex
 	claimPendingTransactionsArgsForCall []struct {
 		arg1 context.Context
@@ -38,11 +38,11 @@ type Storage struct {
 		arg5 string
 	}
 	claimPendingTransactionsReturns struct {
-		result1 []*ttxdb.TransactionRecord
+		result1 []*ttxdb.RecoveryClaim
 		result2 error
 	}
 	claimPendingTransactionsReturnsOnCall map[int]struct {
-		result1 []*ttxdb.TransactionRecord
+		result1 []*ttxdb.RecoveryClaim
 		result2 error
 	}
 	ReleaseRecoveryClaimStub        func(context.Context, string, string, string) error
@@ -145,7 +145,7 @@ func (fake *Storage) AcquireRecoveryLeadershipReturnsOnCall(i int, result1 recov
 	}{result1, result2, result3}
 }
 
-func (fake *Storage) ClaimPendingTransactions(arg1 context.Context, arg2 time.Duration, arg3 time.Duration, arg4 int, arg5 string) ([]*ttxdb.TransactionRecord, error) {
+func (fake *Storage) ClaimPendingTransactions(arg1 context.Context, arg2 time.Duration, arg3 time.Duration, arg4 int, arg5 string) ([]*ttxdb.RecoveryClaim, error) {
 	fake.claimPendingTransactionsMutex.Lock()
 	ret, specificReturn := fake.claimPendingTransactionsReturnsOnCall[len(fake.claimPendingTransactionsArgsForCall)]
 	fake.claimPendingTransactionsArgsForCall = append(fake.claimPendingTransactionsArgsForCall, struct {
@@ -174,7 +174,7 @@ func (fake *Storage) ClaimPendingTransactionsCallCount() int {
 	return len(fake.claimPendingTransactionsArgsForCall)
 }
 
-func (fake *Storage) ClaimPendingTransactionsCalls(stub func(context.Context, time.Duration, time.Duration, int, string) ([]*ttxdb.TransactionRecord, error)) {
+func (fake *Storage) ClaimPendingTransactionsCalls(stub func(context.Context, time.Duration, time.Duration, int, string) ([]*ttxdb.RecoveryClaim, error)) {
 	fake.claimPendingTransactionsMutex.Lock()
 	defer fake.claimPendingTransactionsMutex.Unlock()
 	fake.ClaimPendingTransactionsStub = stub
@@ -187,28 +187,28 @@ func (fake *Storage) ClaimPendingTransactionsArgsForCall(i int) (context.Context
 	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3, argsForCall.arg4, argsForCall.arg5
 }
 
-func (fake *Storage) ClaimPendingTransactionsReturns(result1 []*ttxdb.TransactionRecord, result2 error) {
+func (fake *Storage) ClaimPendingTransactionsReturns(result1 []*ttxdb.RecoveryClaim, result2 error) {
 	fake.claimPendingTransactionsMutex.Lock()
 	defer fake.claimPendingTransactionsMutex.Unlock()
 	fake.ClaimPendingTransactionsStub = nil
 	fake.claimPendingTransactionsReturns = struct {
-		result1 []*ttxdb.TransactionRecord
+		result1 []*ttxdb.RecoveryClaim
 		result2 error
 	}{result1, result2}
 }
 
-func (fake *Storage) ClaimPendingTransactionsReturnsOnCall(i int, result1 []*ttxdb.TransactionRecord, result2 error) {
+func (fake *Storage) ClaimPendingTransactionsReturnsOnCall(i int, result1 []*ttxdb.RecoveryClaim, result2 error) {
 	fake.claimPendingTransactionsMutex.Lock()
 	defer fake.claimPendingTransactionsMutex.Unlock()
 	fake.ClaimPendingTransactionsStub = nil
 	if fake.claimPendingTransactionsReturnsOnCall == nil {
 		fake.claimPendingTransactionsReturnsOnCall = make(map[int]struct {
-			result1 []*ttxdb.TransactionRecord
+			result1 []*ttxdb.RecoveryClaim
 			result2 error
 		})
 	}
 	fake.claimPendingTransactionsReturnsOnCall[i] = struct {
-		result1 []*ttxdb.TransactionRecord
+		result1 []*ttxdb.RecoveryClaim
 		result2 error
 	}{result1, result2}
 }

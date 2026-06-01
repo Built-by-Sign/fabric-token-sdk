@@ -35,12 +35,11 @@ type Config struct {
 	AdvisoryLockID int64
 	// InstanceID identifies the current replica as the lease owner.
 	InstanceID string
-	// NotFoundGracePeriod controls when a transaction whose finality lookup
-	// keeps returning NotFound should be force-marked Deleted to unblock the
-	// recovery queue. When stored_at is older than this duration, the row is
-	// promoted to Deleted instead of being re-queued forever. Default 30 min.
-	// Set to 0 explicitly via yaml to disable promotion.
-	// Source: obsidian "CBDC 压测优化迭代 2026-05-12" §4, fork PR #12.
+	// NotFoundGracePeriod: when GetTransactionStatus returns a NotFound error and
+	// the tx was stored more than this duration ago, the recovery loop marks the
+	// row as Orphan instead of leaving it for another retry. Prevents the queue
+	// from being permanently blocked by transactions that never reached the
+	// ledger (broadcast failures, mempool drops). Zero disables this behaviour.
 	NotFoundGracePeriod time.Duration
 }
 
@@ -97,7 +96,10 @@ func LoadConfig(cfg *config.Configuration) (Config, error) {
 	if config.InstanceID != "" {
 		result.InstanceID = config.InstanceID
 	}
-	// NotFoundGracePeriod uses IsSet so an explicit 0 (disable) is honored.
+	// NotFoundGracePeriod accepts an explicit zero to disable the Orphan
+	// promotion, so check IsSet rather than the Go zero value. Without this
+	// gate, setting notFoundGracePeriod: 0 in config would silently fall back
+	// to the 30 min default and the documented opt-out would be unreachable.
 	if cfg.IsSet(ConfigKeyRecovery + ".notFoundGracePeriod") {
 		result.NotFoundGracePeriod = config.NotFoundGracePeriod
 	}
