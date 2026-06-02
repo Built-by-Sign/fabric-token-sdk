@@ -498,6 +498,7 @@ func (db *TransactionStore) GetSchema() string {
 			stored_at TIMESTAMP NOT NULL
 		);
 		CREATE INDEX IF NOT EXISTS idx_tx_id_%s ON %s ( tx_id );
+		CREATE INDEX IF NOT EXISTS idx_storedat_%s ON %s ( stored_at DESC );
 
 		-- movements
 		CREATE TABLE IF NOT EXISTS %s (
@@ -529,7 +530,7 @@ func (db *TransactionStore) GetSchema() string {
 		CREATE INDEX IF NOT EXISTS idx_tx_id_%s ON %s ( tx_id );
 		`,
 		db.table.Requests, db.table.Requests, db.table.Requests, db.table.Requests, db.table.Requests,
-		db.table.Transactions, db.table.Requests, db.table.Transactions, db.table.Transactions,
+		db.table.Transactions, db.table.Requests, db.table.Transactions, db.table.Transactions, db.table.Transactions, db.table.Transactions,
 		db.table.Movements, db.table.Requests, db.table.Movements, db.table.Movements, db.table.Movements, db.table.Movements,
 		db.table.Validations, db.table.Requests,
 		db.table.TransactionEndorseAck, db.table.TransactionEndorseAck, db.table.TransactionEndorseAck,
