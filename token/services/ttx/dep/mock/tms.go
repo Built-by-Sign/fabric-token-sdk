@@ -65,6 +65,21 @@ type TokenManagementService struct {
 		result1 *token.Request
 		result2 error
 	}
+	NewRequestFromBytesStub        func(token.RequestAnchor, []byte, []byte) (*token.Request, error)
+	newRequestFromBytesMutex       sync.RWMutex
+	newRequestFromBytesArgsForCall []struct {
+		arg1 token.RequestAnchor
+		arg2 []byte
+		arg3 []byte
+	}
+	newRequestFromBytesReturns struct {
+		result1 *token.Request
+		result2 error
+	}
+	newRequestFromBytesReturnsOnCall map[int]struct {
+		result1 *token.Request
+		result2 error
+	}
 	PublicParametersManagerStub        func() *token.PublicParametersManager
 	publicParametersManagerMutex       sync.RWMutex
 	publicParametersManagerArgsForCall []struct {
@@ -408,6 +423,82 @@ func (fake *TokenManagementService) NewRequestReturnsOnCall(i int, result1 *toke
 		})
 	}
 	fake.newRequestReturnsOnCall[i] = struct {
+		result1 *token.Request
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *TokenManagementService) NewRequestFromBytes(arg1 token.RequestAnchor, arg2 []byte, arg3 []byte) (*token.Request, error) {
+	var arg2Copy []byte
+	if arg2 != nil {
+		arg2Copy = make([]byte, len(arg2))
+		copy(arg2Copy, arg2)
+	}
+	var arg3Copy []byte
+	if arg3 != nil {
+		arg3Copy = make([]byte, len(arg3))
+		copy(arg3Copy, arg3)
+	}
+	fake.newRequestFromBytesMutex.Lock()
+	ret, specificReturn := fake.newRequestFromBytesReturnsOnCall[len(fake.newRequestFromBytesArgsForCall)]
+	fake.newRequestFromBytesArgsForCall = append(fake.newRequestFromBytesArgsForCall, struct {
+		arg1 token.RequestAnchor
+		arg2 []byte
+		arg3 []byte
+	}{arg1, arg2Copy, arg3Copy})
+	stub := fake.NewRequestFromBytesStub
+	fakeReturns := fake.newRequestFromBytesReturns
+	fake.recordInvocation("NewRequestFromBytes", []interface{}{arg1, arg2Copy, arg3Copy})
+	fake.newRequestFromBytesMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2, arg3)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *TokenManagementService) NewRequestFromBytesCallCount() int {
+	fake.newRequestFromBytesMutex.RLock()
+	defer fake.newRequestFromBytesMutex.RUnlock()
+	return len(fake.newRequestFromBytesArgsForCall)
+}
+
+func (fake *TokenManagementService) NewRequestFromBytesCalls(stub func(token.RequestAnchor, []byte, []byte) (*token.Request, error)) {
+	fake.newRequestFromBytesMutex.Lock()
+	defer fake.newRequestFromBytesMutex.Unlock()
+	fake.NewRequestFromBytesStub = stub
+}
+
+func (fake *TokenManagementService) NewRequestFromBytesArgsForCall(i int) (token.RequestAnchor, []byte, []byte) {
+	fake.newRequestFromBytesMutex.RLock()
+	defer fake.newRequestFromBytesMutex.RUnlock()
+	argsForCall := fake.newRequestFromBytesArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
+}
+
+func (fake *TokenManagementService) NewRequestFromBytesReturns(result1 *token.Request, result2 error) {
+	fake.newRequestFromBytesMutex.Lock()
+	defer fake.newRequestFromBytesMutex.Unlock()
+	fake.NewRequestFromBytesStub = nil
+	fake.newRequestFromBytesReturns = struct {
+		result1 *token.Request
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *TokenManagementService) NewRequestFromBytesReturnsOnCall(i int, result1 *token.Request, result2 error) {
+	fake.newRequestFromBytesMutex.Lock()
+	defer fake.newRequestFromBytesMutex.Unlock()
+	fake.NewRequestFromBytesStub = nil
+	if fake.newRequestFromBytesReturnsOnCall == nil {
+		fake.newRequestFromBytesReturnsOnCall = make(map[int]struct {
+			result1 *token.Request
+			result2 error
+		})
+	}
+	fake.newRequestFromBytesReturnsOnCall[i] = struct {
 		result1 *token.Request
 		result2 error
 	}{result1, result2}

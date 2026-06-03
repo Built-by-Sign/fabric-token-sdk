@@ -108,7 +108,7 @@ func (h *TTXRecoveryHandler) applyFinalityLogic(ctx context.Context, txID string
 			h.logger.DebugfContext(ctx, "loaded token request from database for [%s]", txID)
 
 			// Process token request using the hasher
-			tr, msgToSign, err = h.hasher.ProcessTokenRequest(ctx, tokenRequestRaw)
+			tr, msgToSign, err = h.hasher.ProcessTokenRequest(ctx, txID, tokenRequestRaw)
 			if err != nil {
 				return errors.Wrapf(err, "failed to process token request [%s]", txID)
 			}

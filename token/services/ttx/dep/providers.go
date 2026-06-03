@@ -74,6 +74,7 @@ type TokenManagementService interface {
 	SigService() *token.SignatureService
 	WalletManager() *token.WalletManager
 	NewFullRequestFromBytes(raw []byte) (*token.Request, error)
+	NewRequestFromBytes(anchor token.RequestAnchor, actions []byte, meta []byte) (*token.Request, error)
 	Vault() *token.Vault
 }
 

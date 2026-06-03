@@ -9,11 +9,12 @@ import (
 )
 
 type TokenRequestHasher struct {
-	ProcessTokenRequestStub        func(context.Context, []byte) (*token.Request, []byte, error)
+	ProcessTokenRequestStub        func(context.Context, string, []byte) (*token.Request, []byte, error)
 	processTokenRequestMutex       sync.RWMutex
 	processTokenRequestArgsForCall []struct {
 		arg1 context.Context
-		arg2 []byte
+		arg2 string
+		arg3 []byte
 	}
 	processTokenRequestReturns struct {
 		result1 *token.Request
@@ -29,24 +30,25 @@ type TokenRequestHasher struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *TokenRequestHasher) ProcessTokenRequest(arg1 context.Context, arg2 []byte) (*token.Request, []byte, error) {
-	var arg2Copy []byte
-	if arg2 != nil {
-		arg2Copy = make([]byte, len(arg2))
-		copy(arg2Copy, arg2)
+func (fake *TokenRequestHasher) ProcessTokenRequest(arg1 context.Context, arg2 string, arg3 []byte) (*token.Request, []byte, error) {
+	var arg3Copy []byte
+	if arg3 != nil {
+		arg3Copy = make([]byte, len(arg3))
+		copy(arg3Copy, arg3)
 	}
 	fake.processTokenRequestMutex.Lock()
 	ret, specificReturn := fake.processTokenRequestReturnsOnCall[len(fake.processTokenRequestArgsForCall)]
 	fake.processTokenRequestArgsForCall = append(fake.processTokenRequestArgsForCall, struct {
 		arg1 context.Context
-		arg2 []byte
-	}{arg1, arg2Copy})
+		arg2 string
+		arg3 []byte
+	}{arg1, arg2, arg3Copy})
 	stub := fake.ProcessTokenRequestStub
 	fakeReturns := fake.processTokenRequestReturns
-	fake.recordInvocation("ProcessTokenRequest", []interface{}{arg1, arg2Copy})
+	fake.recordInvocation("ProcessTokenRequest", []interface{}{arg1, arg2, arg3Copy})
 	fake.processTokenRequestMutex.Unlock()
 	if stub != nil {
-		return stub(arg1, arg2)
+		return stub(arg1, arg2, arg3)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2, ret.result3
@@ -60,17 +62,17 @@ func (fake *TokenRequestHasher) ProcessTokenRequestCallCount() int {
 	return len(fake.processTokenRequestArgsForCall)
 }
 
-func (fake *TokenRequestHasher) ProcessTokenRequestCalls(stub func(context.Context, []byte) (*token.Request, []byte, error)) {
+func (fake *TokenRequestHasher) ProcessTokenRequestCalls(stub func(context.Context, string, []byte) (*token.Request, []byte, error)) {
 	fake.processTokenRequestMutex.Lock()
 	defer fake.processTokenRequestMutex.Unlock()
 	fake.ProcessTokenRequestStub = stub
 }
 
-func (fake *TokenRequestHasher) ProcessTokenRequestArgsForCall(i int) (context.Context, []byte) {
+func (fake *TokenRequestHasher) ProcessTokenRequestArgsForCall(i int) (context.Context, string, []byte) {
 	fake.processTokenRequestMutex.RLock()
 	defer fake.processTokenRequestMutex.RUnlock()
 	argsForCall := fake.processTokenRequestArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
 func (fake *TokenRequestHasher) ProcessTokenRequestReturns(result1 *token.Request, result2 []byte, result3 error) {

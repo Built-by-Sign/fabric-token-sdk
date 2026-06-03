@@ -37,7 +37,7 @@ type transactionDB interface {
 //
 //go:generate counterfeiter -o mock/token_request_hasher.go -fake-name TokenRequestHasher . tokenRequestHasher
 type tokenRequestHasher interface {
-	ProcessTokenRequest(ctx context.Context, tokenRequestRaw []byte) (tr *token.Request, msgToSign []byte, err error)
+	ProcessTokenRequest(ctx context.Context, txID string, tokenRequestRaw []byte) (tr *token.Request, msgToSign []byte, err error)
 }
 
 // tokensService defines the interface for token service operations needed by the listener
@@ -126,7 +126,7 @@ func (t *Listener) runOnStatus(ctx context.Context, txID string, status int, mes
 			t.logger.DebugfContext(ctx, "Read token request")
 
 			// Process token request using the hasher
-			tr, msgToSign, err = t.hasher.ProcessTokenRequest(ctx, tokenRequestRaw)
+			tr, msgToSign, err = t.hasher.ProcessTokenRequest(ctx, txID, tokenRequestRaw)
 			if err != nil {
 				return errors.Errorf("failed to process token request [%s]: [%w]", txID, err)
 			}
