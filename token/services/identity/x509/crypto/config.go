@@ -66,7 +66,8 @@ type PKCS11 struct {
 	SoftwareVerify bool           `yaml:"SoftwareVerify,omitempty"`
 	Immutable      bool           `yaml:"Immutable,omitempty"`
 	AltID          string         `yaml:"AltId,omitempty"`
-	KeyIDs         []KeyIDMapping `mapstructure:"KeyIds"           yaml:"KeyIds,omitempty"`
+	KeyIDs           []KeyIDMapping `mapstructure:"KeyIds"           yaml:"KeyIds,omitempty"`
+	SessionCacheSize uint           `yaml:"SessionCacheSize,omitempty"`
 }
 
 type KeyIDMapping struct {
@@ -94,14 +95,15 @@ func ToBCCSPOpts(boxed any) (*BCCSP, error) {
 
 func ToPKCS11OptsOpts(o *PKCS11) *pkcs11.PKCS11Opts {
 	res := &pkcs11.PKCS11Opts{
-		Security:       o.Security,
-		Hash:           o.Hash,
-		Library:        o.Library,
-		Label:          o.Label,
-		Pin:            o.Pin,
-		SoftwareVerify: o.SoftwareVerify,
-		Immutable:      o.Immutable,
-		AltID:          o.AltID,
+		Security:         o.Security,
+		Hash:             o.Hash,
+		Library:          o.Library,
+		Label:            o.Label,
+		Pin:              o.Pin,
+		SoftwareVerify:   o.SoftwareVerify,
+		Immutable:        o.Immutable,
+		AltID:            o.AltID,
+		SessionCacheSize: o.SessionCacheSize,
 	}
 	for _, d := range o.KeyIDs {
 		res.KeyIDs = append(res.KeyIDs, pkcs11.KeyIDMapping{
