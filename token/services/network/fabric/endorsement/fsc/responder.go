@@ -9,6 +9,8 @@ package fsc
 import (
 	"context"
 	"encoding/json"
+	"sync/atomic"
+	"time"
 
 	"github.com/hyperledger-labs/fabric-smart-client/pkg/utils/errors"
 	"github.com/hyperledger-labs/fabric-smart-client/platform/fabric"
@@ -70,38 +72,56 @@ func NewRequestApprovalResponderView(
 }
 
 func (r *RequestApprovalResponderView) Call(context view.Context) (any, error) {
+	callStart := time.Now()
+
 	// receive
+	recvStart := time.Now()
 	request, err := r.receive(context)
+	recordPhaseSince(context.Context(), "er_resp_receive", recvStart, err)
 	if err != nil {
 		return nil, errors.Join(ErrReceivedProposal, err)
 	}
 	defer request.Rws.Done()
 
 	// validate proposal
+	vpStart := time.Now()
 	err = r.validateProposal(context, request)
+	recordPhaseSince(context.Context(), "er_resp_validate_proposal", vpStart, err)
 	if err != nil {
 		return nil, errors.Join(ErrValidateProposal, err)
 	}
 
-	// validate
+	// validate. getStateNanos accumulates time spent in the ledger state reads
+	// the validator triggers during ZK verification, so er_resp_validate can be
+	// split into pure-CPU verify vs state I/O (er_resp_getstate).
+	var getStateNanos int64
+	vStart := time.Now()
 	err = r.validate(context, request, func(id token.ID) ([]byte, error) {
 		key, err := r.keyTranslator.CreateOutputKey(id.TxId, id.Index)
 		if err != nil {
 			return nil, errors.WithMessagef(err, "failed to create token key for id [%s]", id)
 		}
 
-		return request.Rws.GetDirectState(request.TMSID.Namespace, key)
+		gsStart := time.Now()
+		v, e := request.Rws.GetDirectState(request.TMSID.Namespace, key)
+		atomic.AddInt64(&getStateNanos, int64(time.Since(gsStart)))
+		return v, e
 	})
+	recordPhaseSince(context.Context(), "er_resp_validate", vStart, err)
+	recordPhaseDur(context.Context(), "er_resp_getstate", time.Duration(getStateNanos), err)
 	if err != nil {
 		return nil, errors.Join(ErrValidateProposal, err)
 	}
 
 	// endorse
+	eStart := time.Now()
 	res, err := r.endorse(context, request)
+	recordPhaseSince(context.Context(), "er_resp_endorse", eStart, err)
 	if err != nil {
 		return nil, errors.Join(ErrEndorseProposal, err)
 	}
 
+	recordPhaseSince(context.Context(), "er_resp_total", callStart, nil)
 	return res, nil
 }
 
@@ -300,12 +320,14 @@ func (r *RequestApprovalResponderView) validate(context view.Context, request *R
 		return errors.WithMessagef(err, "failed to get validator [%s]", request.TMSID)
 	}
 	logger.DebugfContext(context.Context(), "Unmarshal and verify with metadata for TX [%s]", request.Anchor)
+	zkStart := time.Now()
 	actions, meta, err := validator.UnmarshallAndVerifyWithMetadata(
 		context.Context(),
 		token2.NewLedgerFromGetter(getState),
 		token2.RequestAnchor(request.Anchor),
 		request.RequestRaw,
 	)
+	recordPhaseSince(context.Context(), "er_resp_zk_verify", zkStart, err)
 	if err != nil {
 		return errors.WithMessagef(err, "failed to verify token request for [%s]", request.Anchor)
 	}
@@ -314,13 +336,16 @@ func (r *RequestApprovalResponderView) validate(context view.Context, request *R
 		return errors.WithMessagef(err, "failed to retrieve db [%s]", request.TMSID)
 	}
 	logger.DebugfContext(context.Context(), "Append validation record for TX [%s]", request.Anchor)
-	if err := db.AppendValidationRecord(
+	apStart := time.Now()
+	err = db.AppendValidationRecord(
 		context.Context(),
 		request.Anchor,
 		request.RequestRaw,
 		meta,
 		request.PublicParamsHash,
-	); err != nil {
+	)
+	recordPhaseSince(context.Context(), "er_resp_append_record", apStart, err)
+	if err != nil {
 		return errors.WithMessagef(err, "failed to append metadata for [%s]", request.Anchor)
 	}
 	request.Actions = actions
