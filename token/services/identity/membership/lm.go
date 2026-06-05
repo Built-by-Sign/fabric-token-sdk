@@ -10,6 +10,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sync"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/logging"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/storage"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/utils"
+	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v2"
 )
 
@@ -176,6 +178,12 @@ type LocalMembership struct {
 	localIdentitiesByName     map[string][]LocalIdentityWithPriority
 	localIdentitiesByIdentity map[string]*LocalIdentity
 	localIdentitiesByConfig   map[string]*LocalIdentity
+	// registerMu serialises the shared-state mutation section of
+	// addLocalIdentity when Load registers stored identity configurations in
+	// parallel. The expensive part (KeyManager construction, idemix/x509
+	// parsing) runs outside this lock; only the in-memory index writes,
+	// deserializer registration and identity binding are serialised.
+	registerMu sync.Mutex
 	// labels known to not resolve. Without negative caching every audit
 	// pass against a non-local label re-takes the write lock and reloads
 	// stored identity configurations from PG; on a busy auditor that
@@ -374,22 +382,44 @@ func (l *LocalMembership) Load(ctx context.Context, identities []idriver.Configu
 			if !found {
 				// keep this
 				filtered = append(filtered, stored)
-				defaults = append(defaults, false)
 			}
 		}
 	}
 
-	ics := append(identityConfigurations, filtered...)
-
-	// load identities from configuration
-	for i, identityConfiguration := range ics {
-		l.logger.Infof("load identity configuration [%+v]", identityConfiguration)
+	// load identities from configuration.
+	// Configured identities (few, may carry the default flag) are registered
+	// sequentially to preserve default-identity semantics.
+	for i, identityConfiguration := range identityConfigurations {
+		l.logger.Debugf("load identity configuration [%+v]", identityConfiguration)
 		if err := l.registerIdentityConfiguration(ctx, &identityConfiguration, defaults[i]); err != nil {
 			// we log the error so the user can fix it but it shouldn't stop the loading of the service.
 			l.logger.Errorf("failed loading identity with err [%s]", err)
 		} else {
 			l.logger.Debugf("load wallet for identity [%+v] done.", identityConfiguration)
 		}
+	}
+
+	// Stored identity configurations (potentially hundreds of thousands of
+	// user wallets, all non-default) are registered in parallel: the
+	// expensive KeyManager construction (idemix/x509 parsing) runs
+	// concurrently, while shared-state writes are serialised by registerMu
+	// inside addLocalIdentity. Errors are logged and skipped, matching the
+	// sequential behaviour above.
+	if len(filtered) > 0 {
+		l.logger.Infof("loading [%d] stored identity configurations with up to [%d] workers", len(filtered), runtime.NumCPU())
+		g, gctx := errgroup.WithContext(ctx)
+		g.SetLimit(runtime.NumCPU())
+		for i := range filtered {
+			identityConfiguration := filtered[i]
+			g.Go(func() error {
+				l.logger.Debugf("load identity configuration [%+v]", identityConfiguration)
+				if err := l.registerIdentityConfiguration(gctx, &identityConfiguration, false); err != nil {
+					l.logger.Errorf("failed loading identity with err [%s]", err)
+				}
+				return nil
+			})
+		}
+		_ = g.Wait() // workers never return errors; Wait only synchronises completion
 	}
 
 	// if no default identity, use the first one
@@ -679,6 +709,12 @@ func (l *LocalMembership) addLocalIdentity(ctx context.Context, config *Identity
 			return resolvedIdentity, auditInfo, nil
 		}
 	}
+
+	// Serialise shared-state mutations below; the expensive KeyManager
+	// construction and identity resolution above run concurrently when Load
+	// registers stored identity configurations in parallel.
+	l.registerMu.Lock()
+	defer l.registerMu.Unlock()
 
 	// check for duplicates
 	name := config.ID

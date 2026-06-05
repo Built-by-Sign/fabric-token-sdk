@@ -9,9 +9,11 @@ package membership_test
 import (
 	"context"
 	stdErrors "errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 
 	"github.com/hyperledger-labs/fabric-smart-client/platform/view/view"
@@ -834,4 +836,67 @@ func TestPriorityComparison(t *testing.T) {
 	assert.Equal(t, 0, list[0].Priority)
 	assert.Equal(t, 5, list[1].Priority)
 	assert.Equal(t, 10, list[2].Priority)
+}
+
+// TestLoad_ParallelStoredConfigurations exercises the parallel registration
+// path for stored identity configurations (the 100k+ user-wallet scenario)
+// and verifies all identities are registered. Run with -race to validate the
+// registerMu serialisation of shared-state writes.
+func TestLoad_ParallelStoredConfigurations(t *testing.T) {
+	ctx := t.Context()
+
+	const n = 500
+
+	ip := &mock.IdentityProvider{}
+	ip.BindReturns(nil)
+	des := &mock.SignerDeserializerManager{}
+
+	iss := &mock.IdentityStoreService{}
+	iss.ConfigurationExistsReturns(true, nil) // stored configs are already persisted
+	iss.NotifierReturns(nil, storage.ErrNotSupported)
+	it := &mock.IdentityConfigurationIterator{}
+	var iterMu sync.Mutex
+	served := 0
+	it.NextCalls(func() (*idriver.IdentityConfiguration, error) {
+		iterMu.Lock()
+		defer iterMu.Unlock()
+		if served >= n {
+			return nil, nil
+		}
+		served++
+		return &idriver.IdentityConfiguration{
+			ID:   fmt.Sprintf("wallet-%d", served),
+			Type: "testType",
+			URL:  fmt.Sprintf("/tmp/wallet-%d", served),
+		}, nil
+	})
+	iss.IteratorConfigurationsReturns(it, nil)
+
+	km := &mock.KeyManager{}
+	km.EnrollmentIDReturns("e1")
+	km.AnonymousReturns(false)
+	km.IsRemoteReturns(false)
+	km.IdentityReturns(&idriver.IdentityDescriptor{Identity: []byte("id1"), AuditInfo: []byte("ai")}, nil)
+	km.IdentityTypeReturns(identity.Type(99))
+	kmp := &mock.KeyManagerProvider{}
+	kmp.GetReturns(km, nil)
+
+	lm := membership.NewLocalMembership(
+		logging.MustGetLogger("test"),
+		&mock.Config{},
+		[]byte("netid"),
+		des,
+		iss,
+		"testType",
+		false,
+		ip,
+		kmp,
+	)
+
+	require.NoError(t, lm.Load(ctx, nil, nil))
+
+	ids, err := lm.IDs()
+	require.NoError(t, err)
+	assert.Len(t, ids, n)
+	assert.Equal(t, n, des.AddTypedSignerDeserializerCallCount())
 }
