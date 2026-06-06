@@ -75,13 +75,17 @@ func NewDriverWithDbProvider(config driver3.Config, dbProvider fscPostgres.DbPro
 func newTokenStoreProvider(dbProvider fscPostgres.DbProvider) lazy.Provider[fscPostgres.Config, *TokenStore] {
 	return lazy.NewProviderWithKeyMapper(key, func(o fscPostgres.Config) (*TokenStore, error) {
 		opts := fscPostgres.Opts{
-			DataSource:      o.DataSource,
-			MaxOpenConns:    o.MaxOpenConns,
-			MaxIdleConns:    *o.MaxIdleConns,
-			MaxIdleTime:     *o.MaxIdleTime,
-			TablePrefix:     o.TablePrefix,
-			TableNameParams: o.TableNameParams,
-			Tracing:         o.Tracing,
+			DataSource:        o.DataSource,
+			MaxOpenConns:      o.MaxOpenConns,
+			MaxIdleConns:      *o.MaxIdleConns,
+			MaxIdleTime:       *o.MaxIdleTime,
+			WriteDataSource:   o.WriteDataSource,
+			WriteMaxOpenConns: ptrValue(o.WriteMaxOpenConns),
+			WriteMaxIdleConns: ptrValue(o.WriteMaxIdleConns),
+			WriteMaxIdleTime:  ptrValue(o.WriteMaxIdleTime),
+			TablePrefix:       o.TablePrefix,
+			TableNameParams:   o.TableNameParams,
+			Tracing:           o.Tracing,
 		}
 		dbs, err := dbProvider.Get(opts)
 		if err != nil {
@@ -120,13 +124,17 @@ func newTokenStoreProvider(dbProvider fscPostgres.DbProvider) lazy.Provider[fscP
 func newIdentityStoreProvider(dbProvider fscPostgres.DbProvider) lazy.Provider[fscPostgres.Config, *IdentityStore] {
 	return lazy.NewProviderWithKeyMapper(key, func(o fscPostgres.Config) (*IdentityStore, error) {
 		opts := fscPostgres.Opts{
-			DataSource:      o.DataSource,
-			MaxOpenConns:    o.MaxOpenConns,
-			MaxIdleConns:    *o.MaxIdleConns,
-			MaxIdleTime:     *o.MaxIdleTime,
-			TablePrefix:     o.TablePrefix,
-			TableNameParams: o.TableNameParams,
-			Tracing:         o.Tracing,
+			DataSource:        o.DataSource,
+			MaxOpenConns:      o.MaxOpenConns,
+			MaxIdleConns:      *o.MaxIdleConns,
+			MaxIdleTime:       *o.MaxIdleTime,
+			WriteDataSource:   o.WriteDataSource,
+			WriteMaxOpenConns: ptrValue(o.WriteMaxOpenConns),
+			WriteMaxIdleConns: ptrValue(o.WriteMaxIdleConns),
+			WriteMaxIdleTime:  ptrValue(o.WriteMaxIdleTime),
+			TablePrefix:       o.TablePrefix,
+			TableNameParams:   o.TableNameParams,
+			Tracing:           o.Tracing,
 		}
 		dbs, err := dbProvider.Get(opts)
 		if err != nil {
@@ -166,13 +174,17 @@ func newIdentityStoreProvider(dbProvider fscPostgres.DbProvider) lazy.Provider[f
 func newTransactionStoreProvider(dbProvider fscPostgres.DbProvider) lazy.Provider[fscPostgres.Config, *TransactionStore] {
 	return lazy.NewProviderWithKeyMapper(key, func(o fscPostgres.Config) (*TransactionStore, error) {
 		opts := fscPostgres.Opts{
-			DataSource:      o.DataSource,
-			MaxOpenConns:    o.MaxOpenConns,
-			MaxIdleConns:    *o.MaxIdleConns,
-			MaxIdleTime:     *o.MaxIdleTime,
-			TablePrefix:     o.TablePrefix,
-			TableNameParams: o.TableNameParams,
-			Tracing:         o.Tracing,
+			DataSource:        o.DataSource,
+			MaxOpenConns:      o.MaxOpenConns,
+			MaxIdleConns:      *o.MaxIdleConns,
+			MaxIdleTime:       *o.MaxIdleTime,
+			WriteDataSource:   o.WriteDataSource,
+			WriteMaxOpenConns: ptrValue(o.WriteMaxOpenConns),
+			WriteMaxIdleConns: ptrValue(o.WriteMaxIdleConns),
+			WriteMaxIdleTime:  ptrValue(o.WriteMaxIdleTime),
+			TablePrefix:       o.TablePrefix,
+			TableNameParams:   o.TableNameParams,
+			Tracing:           o.Tracing,
 		}
 		dbs, err := dbProvider.Get(opts)
 		if err != nil {
@@ -281,13 +293,17 @@ func (d *Driver) NewOwnerTransaction(name driver2.PersistenceName, params ...str
 func newProviderWithKeyMapper[V common.DBObject](dbProvider fscPostgres.DbProvider, constructor common3.PersistenceConstructor[V], storeType string) lazy.Provider[fscPostgres.Config, V] {
 	return lazy.NewProviderWithKeyMapper(key, func(o fscPostgres.Config) (V, error) {
 		opts := fscPostgres.Opts{
-			DataSource:      o.DataSource,
-			MaxOpenConns:    o.MaxOpenConns,
-			MaxIdleConns:    *o.MaxIdleConns,
-			MaxIdleTime:     *o.MaxIdleTime,
-			TablePrefix:     o.TablePrefix,
-			TableNameParams: o.TableNameParams,
-			Tracing:         o.Tracing,
+			DataSource:        o.DataSource,
+			MaxOpenConns:      o.MaxOpenConns,
+			MaxIdleConns:      *o.MaxIdleConns,
+			MaxIdleTime:       *o.MaxIdleTime,
+			WriteDataSource:   o.WriteDataSource,
+			WriteMaxOpenConns: ptrValue(o.WriteMaxOpenConns),
+			WriteMaxIdleConns: ptrValue(o.WriteMaxIdleConns),
+			WriteMaxIdleTime:  ptrValue(o.WriteMaxIdleTime),
+			TablePrefix:       o.TablePrefix,
+			TableNameParams:   o.TableNameParams,
+			Tracing:           o.Tracing,
 		}
 		dbs, err := dbProvider.Get(opts)
 		if err != nil {
@@ -311,9 +327,17 @@ func newProviderWithKeyMapper[V common.DBObject](dbProvider fscPostgres.DbProvid
 	})
 }
 
+func ptrValue[T any](p *T) T {
+	if p == nil {
+		var zero T
+		return zero
+	}
+	return *p
+}
+
 // key returns a unique key for the given Postgres configuration.
 func key(k fscPostgres.Config) string {
-	return "postgres" + k.DataSource + k.TablePrefix + strings.Join(k.TableNameParams, "_")
+	return "postgres" + k.DataSource + k.WriteDataSource + k.TablePrefix + strings.Join(k.TableNameParams, "_")
 }
 
 // createTableLockID generates a deterministic lock ID for a store type.
