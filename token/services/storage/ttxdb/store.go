@@ -280,8 +280,8 @@ func (d *StoreService) AppendTransactionRecord(ctx context.Context, req *token.R
 	}
 	recordPhase(ctx, "cls_store_add_request", addRequestStart)
 	addTxStart := time.Now()
-	for _, tx := range txs {
-		if err := w.AddTransaction(ctx, tx); err != nil {
+	if len(txs) > 0 {
+		if err := w.AddTransaction(ctx, txs...); err != nil {
 			w.Rollback()
 
 			return errors.WithMessagef(err, "append transactions for txid [%s] failed", record.Anchor)
