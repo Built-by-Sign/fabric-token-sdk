@@ -25,6 +25,7 @@ import (
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/storage"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/utils"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/singleflight"
 	"gopkg.in/yaml.v2"
 )
 
@@ -198,7 +199,18 @@ type LocalMembership struct {
 	targetIdentities        []view.Identity // optional list of identities to prefer
 	anonymous               bool            // when true, only anonymous identities are considered selectable by default
 	closeOnce               sync.Once
+	// reloadGroup collapses concurrent refreshAndGet slow-path reloads into a
+	// single in-flight call. A burst of distinct unresolved labels — e.g. the
+	// auditor running IsMine over remote user-wallet identities that never
+	// resolve here — would otherwise each take the write lock and re-read all
+	// identity configurations from PG, serialising every audit on one mutex.
+	reloadGroup singleflight.Group
 }
+
+// reloadSingleflightKey is the single key used to deduplicate concurrent
+// refreshAndGet reloads; the reload is label-independent (it loads all
+// configurations), so one in-flight reload serves every waiting lookup.
+const reloadSingleflightKey = "reload"
 
 // NewLocalMembership creates a new LocalMembership instance.
 // Parameters:
@@ -811,50 +823,47 @@ func (l *LocalMembership) refreshAndGet(ctx context.Context, label string) *Loca
 	}
 	l.localIdentitiesMutex.RUnlock()
 
-	// Slow path: load + register requires the write lock.
+	// Slow path. Collapse concurrent reloads via singleflight so a burst of
+	// distinct unresolved labels triggers a single reload instead of one per
+	// label. The DB read runs outside the write lock; only the in-memory
+	// registration is serialised. Waiters share the in-flight reload and then
+	// re-check below, so each lookup still resolves against the latest index.
+	l.reloadGroup.Do(reloadSingleflightKey, func() (any, error) {
+		l.logger.DebugfContext(ctx, "refresh and get local identity for label [%s]", utils.Hashable(label))
+		// DB read runs WITHOUT the write lock.
+		storedIdentityConfigurations, err := l.storedIdentityConfigurations(ctx)
+		if err != nil {
+			l.logger.ErrorfContext(ctx, "failed to load stored identity configurations: %s", err)
+			return nil, nil
+		}
+
+		// Registration mutates the in-memory index; readers use RLock, so the
+		// mutations must run under the write lock.
+		l.localIdentitiesMutex.Lock()
+		defer l.localIdentitiesMutex.Unlock()
+		for _, identityConfiguration := range storedIdentityConfigurations {
+			key := l.configKey(&identityConfiguration)
+			if _, ok := l.localIdentitiesByConfig[key]; ok {
+				continue
+			}
+
+			l.logger.InfofContext(ctx, "load identity configuration [%+v]", identityConfiguration)
+			if err := l.registerIdentityConfiguration(ctx, &identityConfiguration, false); err != nil {
+				l.logger.ErrorfContext(ctx, "failed loading identity with err [%s]", err)
+			}
+		}
+		return nil, nil
+	})
+
+	// Re-check after the reload. The write lock is required because a miss
+	// records a negative entry, and the negative map is guarded by the same
+	// lock as the rest of the index.
 	l.localIdentitiesMutex.Lock()
 	defer l.localIdentitiesMutex.Unlock()
-
-	// Double check (another writer may have populated while we waited).
-	identities, ok := l.localIdentitiesByName[label]
-	if ok {
+	if identities, ok := l.localIdentitiesByName[label]; ok {
 		return identities[0].Identity
 	}
-	mapped, ok := l.localIdentitiesByIdentity[label]
-	if ok {
-		return mapped
-	}
-	if _, ok := l.localIdentitiesNegative[label]; ok {
-		return nil
-	}
-
-	l.logger.DebugfContext(ctx, "refresh and get local identity for label [%s]", utils.Hashable(label))
-	storedIdentityConfigurations, err := l.storedIdentityConfigurations(ctx)
-	if err != nil {
-		l.logger.ErrorfContext(ctx, "failed to load stored identity configurations: %s", err)
-
-		return nil
-	}
-
-	for _, identityConfiguration := range storedIdentityConfigurations {
-		key := l.configKey(&identityConfiguration)
-		if _, ok := l.localIdentitiesByConfig[key]; ok {
-			continue
-		}
-
-		l.logger.InfofContext(ctx, "load identity configuration [%+v]", identityConfiguration)
-		if err := l.registerIdentityConfiguration(ctx, &identityConfiguration, false); err != nil {
-			l.logger.ErrorfContext(ctx, "failed loading identity with err [%s]", err)
-		}
-	}
-
-	// check again
-	identities, ok = l.localIdentitiesByName[label]
-	if ok {
-		return identities[0].Identity
-	}
-	mapped, ok = l.localIdentitiesByIdentity[label]
-	if ok {
+	if mapped, ok := l.localIdentitiesByIdentity[label]; ok {
 		return mapped
 	}
 
