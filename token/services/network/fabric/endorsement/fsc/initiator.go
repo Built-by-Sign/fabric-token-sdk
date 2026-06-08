@@ -64,46 +64,61 @@ func NewRequestApprovalView(
 func (r *RequestApprovalView) Call(ctx view.Context) (any, error) {
 	logger.DebugfContext(ctx.Context(), "request approval from tms id [%s]", r.TMSID)
 
+	newTxStart := time.Now()
 	tx, err := r.EndorserService.NewTransaction(
 		ctx,
 		fabric.WithCreator(r.TxID.Creator),
 		fabric.WithNonce(r.TxID.Nonce),
 	)
+	recordPhaseSince(ctx.Context(), "req_approval_new_tx", newTxStart, err)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "failed to create endorser transaction")
 	}
 
 	tx.SetProposal(r.TMSID.Namespace, ChaincodeVersion, InvokeFunction)
+	endorseProposalStart := time.Now()
 	if err := tx.EndorseProposal(); err != nil {
+		recordPhaseSince(ctx.Context(), "req_approval_endorse_proposal", endorseProposalStart, err)
 		return nil, errors.WithMessagef(err, "failed to endorse proposal")
 	}
+	recordPhaseSince(ctx.Context(), "req_approval_endorse_proposal", endorseProposalStart, nil)
 
 	// transient fields
+	transientStart := time.Now()
 	if err := tx.SetTransientState(TransientTMSIDKey, r.TMSID); err != nil {
+		recordPhaseSince(ctx.Context(), "req_approval_set_transient", transientStart, err)
 		return nil, errors.WithMessagef(err, "failed to set TMS ID transient")
 	}
 	if err := tx.SetTransient(TransientTokenRequestKey, r.RequestRaw); err != nil {
+		recordPhaseSince(ctx.Context(), "req_approval_set_transient", transientStart, err)
 		return nil, errors.WithMessagef(err, "failed to set token request transient")
 	}
 	if len(r.Metadata) > 0 {
 		metadataRaw, err := json.Marshal(r.Metadata)
 		if err != nil {
+			recordPhaseSince(ctx.Context(), "req_approval_set_transient", transientStart, err)
 			return nil, errors.WithMessagef(err, "failed to marshal approval metadata")
 		}
 		if err := tx.SetTransient(TransientApprovalMetadataKey, metadataRaw); err != nil {
+			recordPhaseSince(ctx.Context(), "req_approval_set_transient", transientStart, err)
 			return nil, errors.WithMessagef(err, "failed to set approval metadata transient")
 		}
 	}
+	recordPhaseSince(ctx.Context(), "req_approval_set_transient", transientStart, nil)
 
 	logger.DebugfContext(ctx.Context(), "request endorsement on tx [%s] to [%v]...", tx.ID(), r.Endorsers)
+	collectEndorsementsStart := time.Now()
 	err = r.EndorserService.CollectEndorsements(ctx, tx, 2*time.Minute, r.Endorsers...)
+	recordPhaseSince(ctx.Context(), "req_approval_collect_endorsements", collectEndorsementsStart, err)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "failed to collect endorsements")
 	}
 	logger.DebugfContext(ctx.Context(), "request endorsement done")
 
 	// Return envelope
+	envelopeStart := time.Now()
 	env, err := tx.Envelope()
+	recordPhaseSince(ctx.Context(), "req_approval_envelope", envelopeStart, err)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "failed to retrieve envelope for endorsement")
 	}
