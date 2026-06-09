@@ -541,26 +541,30 @@ func (db *TransactionStore) GetSchema() string {
 
 func (db *TransactionStore) NewTransactionStoreTransaction() (dbdriver.TransactionStoreTransaction, error) {
 	beginStart := time.Now()
-	txn, err := db.writeDB.Begin()
 	// NewTransactionStoreTransaction is part of the driver interface and does not
-	// accept a ctx (caller's trace is already broken at Begin). The histogram
-	// only keys on the phase attribute, so context.Background() is sufficient.
+	// accept a ctx. beginBoundedTx caps the transaction lifetime so a stalled
+	// caller cannot leave the connection idle-in-transaction forever. The
+	// histogram only keys on the phase attribute, so context.Background() is
+	// sufficient for the metric.
+	txn, cancel, err := beginBoundedTx(db.writeDB)
 	phase.Record(context.Background(), "av_append_db_begin", beginStart)
 	if err != nil {
 		return nil, err
 	}
 
 	return &TransactionStoreTransaction{
-		txn:   txn,
-		table: &db.table,
-		ci:    db.ci,
+		txn:    txn,
+		cancel: cancel,
+		table:  &db.table,
+		ci:     db.ci,
 	}, nil
 }
 
 type TransactionStoreTransaction struct {
-	txn   *sql.Tx
-	table *transactionTables
-	ci    common3.CondInterpreter
+	txn    *sql.Tx
+	cancel context.CancelFunc
+	table  *transactionTables
+	ci     common3.CondInterpreter
 }
 
 func (w *TransactionStoreTransaction) Impl() dbdriver.TransactionImpl {
@@ -572,6 +576,9 @@ func (w *TransactionStoreTransaction) Commit() error {
 		return fmt.Errorf("could not commit transaction: %w", err)
 	}
 	w.txn = nil
+	if w.cancel != nil {
+		w.cancel()
+	}
 
 	return nil
 }
@@ -586,6 +593,9 @@ func (w *TransactionStoreTransaction) Rollback() {
 		logger.Errorf("error rolling back (ignoring...): %s", err.Error())
 	}
 	w.txn = nil
+	if w.cancel != nil {
+		w.cancel()
+	}
 }
 
 func (w *TransactionStoreTransaction) AddTransaction(ctx context.Context, rs ...dbdriver.TransactionRecord) error {

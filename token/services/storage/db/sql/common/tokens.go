@@ -1161,12 +1161,15 @@ func (db *TokenStore) Close() error {
 }
 
 func (db *TokenStore) NewTokenDBTransaction() (driver.TokenStoreTransaction, error) {
-	tx, err := db.writeDB.Begin()
+	// No request ctx on this driver-interface method; beginBoundedTx caps the
+	// transaction lifetime so a stalled caller cannot leak the connection as
+	// idle-in-transaction (see bounded_tx.go).
+	tx, cancel, err := beginBoundedTx(db.writeDB)
 	if err != nil {
 		return nil, errors.Errorf("failed starting a db transaction")
 	}
 
-	return &TokenTransaction{ci: db.ci, table: &db.table, tx: tx}, nil
+	return &TokenTransaction{ci: db.ci, table: &db.table, tx: tx, cancel: cancel}, nil
 }
 
 func (db *TokenStore) ContinueTokenDBTransaction(tx driver.Transaction) (driver.TokenStoreTransaction, error) {
@@ -1226,9 +1229,10 @@ func (db *TokenStore) unspendableTokenFormats(ctx context.Context, walletID stri
 }
 
 type TokenTransaction struct {
-	table *tokenTables
-	ci    common3.CondInterpreter
-	tx    *sql.Tx
+	table  *tokenTables
+	ci     common3.CondInterpreter
+	tx     *sql.Tx
+	cancel context.CancelFunc
 }
 
 func (t *TokenTransaction) GetToken(ctx context.Context, tokenID token.ID, includeDeleted bool) (*token.Token, []string, error) {
@@ -1397,11 +1401,19 @@ func (t *TokenTransaction) SetSpendableBySupportedTokenFormats(ctx context.Conte
 }
 
 func (t *TokenTransaction) Commit() error {
-	return t.tx.Commit()
+	err := t.tx.Commit()
+	if t.cancel != nil {
+		t.cancel()
+	}
+	return err
 }
 
 func (t *TokenTransaction) Rollback() error {
-	return t.tx.Rollback()
+	err := t.tx.Rollback()
+	if t.cancel != nil {
+		t.cancel()
+	}
+	return err
 }
 
 func tokenDBError(err error) error {
