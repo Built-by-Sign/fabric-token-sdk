@@ -33,6 +33,15 @@ const (
 	defaultMaxRetries = 3
 	// defaultRetryInterval is the initial backoff delay; it doubles after each attempt.
 	defaultRetryInterval = time.Second
+
+	// defaultPollInterval is how often the shared poller sweeps the pending set.
+	defaultPollInterval = time.Second
+	// defaultPollBatchSize bounds how many txIDs go into one committer status query.
+	defaultPollBatchSize = 2000
+	// defaultPendingTTL bounds how long a tx stays pending before its slot is
+	// reclaimed. It must exceed the longest caller finality timeout so the poller
+	// keeps checking for as long as any watcher waits.
+	defaultPendingTTL = 10 * time.Minute
 )
 
 // ConfigService models the configuration service needed by the NSListenerManager
@@ -300,13 +309,29 @@ func (l *NSFinalityListener) OnStatus(ctx context.Context, txID cdriver.TxID, st
 	}
 }
 
-// NSListenerManager is a listener manager that handles finality notifications
-// and initial transaction state checks.
+// NSListenerManager resolves transaction finality with a single shared poller
+// that batches committer status queries across all pending transactions, rather
+// than one remote query per transaction.
 type NSListenerManager struct {
-	lm            finalityx.ListenerManager
+	lm            finalityx.ListenerManager // retained for wiring; status delivery now goes through the poller
 	queue         Queue
 	queryService  QueryService
 	keyTranslator KeyTranslator
+
+	pollInterval time.Duration
+	batchSize    int
+	pendingTTL   time.Duration
+
+	mu        sync.Mutex
+	pending   map[string]*pendingTx
+	startOnce sync.Once
+}
+
+// pendingTx is a transaction awaiting finality, tracked by the shared poller.
+type pendingTx struct {
+	namespace    string
+	listener     Listener
+	registeredAt time.Time
 }
 
 // NewNSListenerManager creates a new NSListenerManager wrapping an underlying
@@ -317,29 +342,221 @@ func NewNSListenerManager(
 	qs QueryService,
 	keyTranslator KeyTranslator,
 ) *NSListenerManager {
-	return &NSListenerManager{lm: lm, queue: queue, queryService: qs, keyTranslator: keyTranslator}
+	return &NSListenerManager{
+		lm:            lm,
+		queue:         queue,
+		queryService:  qs,
+		keyTranslator: keyTranslator,
+		pollInterval:  defaultPollInterval,
+		batchSize:     defaultPollBatchSize,
+		pendingTTL:    defaultPendingTTL,
+		pending:       make(map[string]*pendingTx),
+	}
 }
 
-// AddFinalityListener adds a listener for the specified transaction ID.
-// It first enqueues a TxCheck to verify the transaction's current state on the
-// ledger and then registers an NSFinalityListener with the underlying manager
-// to catch future status updates. It uses an OnlyOnceListener to ensure
-// the callback is triggered exactly once.
+// AddFinalityListener registers a listener for the given transaction. The tx is
+// added to a pending set that a single shared background poller sweeps in
+// batches (see pollLoop): one committer status query covers all pending txs per
+// chunk, and terminal txs are resolved from the result. This replaces the former
+// per-tx remote check — a speculative GetTransactionStatus at registration time
+// (which almost always saw an as-yet-uncommitted tx) plus a per-tx fallback —
+// that serialized every worker on its own round-trip. The listener is wrapped in
+// an OnlyOnceListener so it fires exactly once.
 func (n *NSListenerManager) AddFinalityListener(namespace string, txID string, listener Listener) error {
 	logger.Debugf("AddFinalityListener [%s]", txID)
 	l := &OnlyOnceListener{listener: listener}
 
-	if err := n.queue.Enqueue(&TxCheck{
-		QueryService:  n.queryService,
-		KeyTranslator: n.keyTranslator,
-		Listener:      l,
-		TxID:          txID,
-		Namespace:     namespace,
-	}); err != nil {
-		return err
+	n.mu.Lock()
+	n.pending[txID] = &pendingTx{namespace: namespace, listener: l, registeredAt: time.Now()}
+	n.mu.Unlock()
+
+	n.startOnce.Do(func() { go n.pollLoop(context.Background()) })
+
+	return nil
+}
+
+// batchStatusQuerier is implemented by query services that resolve many
+// transaction statuses in a single round-trip. The poller uses it when available
+// (the FabricX RemoteQueryService does) and otherwise falls back to per-tx
+// GetTransactionStatus (e.g. tests with a mock query service).
+type batchStatusQuerier interface {
+	GetTransactionStatuses(txIDs []string) (map[string]int32, error)
+}
+
+// pollLoop sweeps the pending set every pollInterval until ctx is canceled. It is
+// started once, lazily, on the first AddFinalityListener.
+func (n *NSListenerManager) pollLoop(ctx context.Context) {
+	ticker := time.NewTicker(n.pollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			n.pollOnce(ctx)
+		}
+	}
+}
+
+// pollOnce snapshots the pending txIDs (reclaiming stale slots), queries their
+// status in batches, and resolves the terminal ones.
+func (n *NSListenerManager) pollOnce(ctx context.Context) {
+	now := time.Now()
+	n.mu.Lock()
+	ids := make([]string, 0, len(n.pending))
+	for txID, p := range n.pending {
+		if now.Sub(p.registeredAt) > n.pendingTTL {
+			// The caller's own finality timeout settles this tx; we only reclaim
+			// the slot so a permanently-dropped tx can't grow the pending set.
+			delete(n.pending, txID)
+			continue
+		}
+		ids = append(ids, txID)
+	}
+	n.mu.Unlock()
+	if len(ids) == 0 {
+		return
 	}
 
-	return n.lm.AddFinalityListener(txID, NewNSFinalityListener(namespace, l, n.queue, n.queryService, n.keyTranslator))
+	for _, chunk := range chunkTxIDs(ids, n.batchSize) {
+		statuses, err := n.getStatuses(chunk)
+		if err != nil {
+			logger.Warnf("finality poller: status query for %d txs failed: %v", len(chunk), err)
+			continue
+		}
+		n.resolveBatch(ctx, statuses)
+	}
+}
+
+// getStatuses resolves many statuses in one round-trip when the query service
+// supports it, otherwise falls back to one call per tx.
+func (n *NSListenerManager) getStatuses(txIDs []string) (map[string]int32, error) {
+	if bq, ok := n.queryService.(batchStatusQuerier); ok {
+		return bq.GetTransactionStatuses(txIDs)
+	}
+	out := make(map[string]int32, len(txIDs))
+	for _, txID := range txIDs {
+		s, err := n.queryService.GetTransactionStatus(txID)
+		if err != nil {
+			return nil, err
+		}
+		out[txID] = s
+	}
+	return out, nil
+}
+
+// resolveBatch handles the terminal transactions in a status response: it
+// batch-fetches the token-request hash for the valid ones, then hands each off to
+// the worker pool for notification (no network I/O on that path). Non-terminal
+// (Unknown/Busy) txs are left pending for the next sweep.
+func (n *NSListenerManager) resolveBatch(ctx context.Context, statuses map[string]int32) {
+	type terminalTx struct {
+		txID   string
+		status fdriver.ValidationCode
+		p      *pendingTx
+	}
+
+	var terminals []terminalTx
+	n.mu.Lock()
+	for txID, raw := range statuses {
+		p, ok := n.pending[txID]
+		if !ok {
+			continue
+		}
+		status := fabricXFSCStatus(raw)
+		if status == fdriver.Unknown || status == fdriver.Busy {
+			continue
+		}
+		terminals = append(terminals, terminalTx{txID: txID, status: status, p: p})
+	}
+	n.mu.Unlock()
+	if len(terminals) == 0 {
+		return
+	}
+
+	// Batch the token-request-hash lookups for valid txs, grouped by namespace.
+	hashQuery := map[cdriver.Namespace][]cdriver.PKey{}
+	keyToTx := make(map[string]string, len(terminals))
+	for _, t := range terminals {
+		if t.status != fdriver.Valid {
+			continue
+		}
+		key, err := n.keyTranslator.CreateTokenRequestKey(t.txID)
+		if err != nil {
+			logger.Warnf("finality poller: token request key for [%s]: %v", t.txID, err)
+			continue
+		}
+		hashQuery[t.p.namespace] = append(hashQuery[t.p.namespace], key)
+		keyToTx[key] = t.txID
+	}
+
+	hashes := make(map[string][]byte, len(keyToTx))
+	if len(hashQuery) > 0 {
+		states, err := n.queryService.GetStates(hashQuery)
+		if err != nil {
+			// Keep terminals pending and retry next sweep rather than notify without a hash.
+			logger.Warnf("finality poller: token-request-hash batch query failed: %v", err)
+			return
+		}
+		for _, byKey := range states {
+			for key, v := range byKey {
+				if txID, ok := keyToTx[key]; ok {
+					hashes[txID] = v.Raw
+				}
+			}
+		}
+	}
+
+	for _, t := range terminals {
+		var hash []byte
+		if t.status == fdriver.Valid {
+			hash = hashes[t.txID]
+		}
+		ev := &resolveEvent{listener: t.p.listener, txID: t.txID, status: t.status, tokenRequestHash: hash}
+		if err := n.queue.Enqueue(ev); err != nil {
+			// Queue full: leave pending so the next sweep retries.
+			logger.Warnf("finality poller: enqueue resolve for [%s] failed: %v", t.txID, err)
+			continue
+		}
+		n.mu.Lock()
+		delete(n.pending, t.txID)
+		n.mu.Unlock()
+	}
+}
+
+// resolveEvent notifies a listener of an already-determined terminal status. It
+// does no network I/O (status and token-request hash are precomputed by the
+// poller), so the worker pool drains these quickly.
+type resolveEvent struct {
+	listener         Listener
+	txID             string
+	status           fdriver.ValidationCode
+	tokenRequestHash []byte
+}
+
+func (e *resolveEvent) Process(ctx context.Context) error {
+	e.listener.OnStatus(ctx, e.txID, e.status, "", e.tokenRequestHash)
+	return nil
+}
+
+func (e *resolveEvent) String() string {
+	return fmt.Sprintf("resolveEvent[%s]", e.txID)
+}
+
+// chunkTxIDs splits ids into slices of at most size elements.
+func chunkTxIDs(ids []string, size int) [][]string {
+	if size <= 0 {
+		return [][]string{ids}
+	}
+	chunks := make([][]string, 0, (len(ids)+size-1)/size)
+	for i := 0; i < len(ids); i += size {
+		end := i + size
+		if end > len(ids) {
+			end = len(ids)
+		}
+		chunks = append(chunks, ids[i:end])
+	}
+	return chunks
 }
 
 // NSListenerManagerProvider is a provider for creating NSListenerManager instances.
