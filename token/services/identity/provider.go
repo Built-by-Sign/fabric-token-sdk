@@ -88,6 +88,10 @@ type Provider struct {
 	deserializer            Deserializer
 
 	signers cache[*SignerEntry]
+	// areMe caches AreMe storage lookups (true = signer exists). Negatives
+	// are overwritten by updateCaches on registration, so they cannot go
+	// permanently stale for identities registered by this node.
+	areMeCache cache[bool]
 }
 
 // NewProvider returns a new instance of Provider
@@ -104,7 +108,10 @@ func NewProvider(
 		enrollmentIDUnmarshaler: enrollmentIDUnmarshaler,
 		deserializer:            deserializer,
 		storage:                 storage,
-		signers:                 secondcache.NewTyped[*SignerEntry](50),
+		// 50 thrashes immediately with hundreds of thousands of wallet
+		// identities; size for the hot set instead.
+		signers:    secondcache.NewTyped[*SignerEntry](65536),
+		areMeCache: secondcache.NewTyped[bool](65536),
 	}
 }
 
@@ -130,9 +137,9 @@ func (p *Provider) RegisterSigner(ctx context.Context, identity driver.Identity,
 }
 
 // AreMe returns the hashes of the passed identities that have a signer registered before.
-// Each identity is resolved via the signer cache and configured storage.
-// There is no secondary "is me" cache: a real cache would need careful handling for
-// single-use identities (for example Idemix nyms) and is intentionally omitted here.
+// Each identity is resolved via the signer cache, a memoized AreMe cache, and
+// finally the configured storage. Memoized negatives are overwritten whenever
+// a signer for that identity is registered or persisted on this node.
 func (p *Provider) AreMe(ctx context.Context, identities ...driver.Identity) []string {
 	start := time.Now()
 	defer phase.Record(ctx, "areme_provider_total", start)
@@ -241,14 +248,20 @@ func (p *Provider) areMe(ctx context.Context, identities ...driver.Identity) []s
 	result := collections.NewSet[string]()
 	notFound := make([]driver.Identity, 0)
 
-	// check local cache
+	// check local caches: live signers first, then memoized AreMe lookups
 	cacheScanStart := time.Now()
 	for _, id := range identities {
 		cacheStart := time.Now()
-		if _, ok := p.signers.Get(id.UniqueID()); ok {
+		uid := id.UniqueID()
+		if _, ok := p.signers.Get(uid); ok {
 			phase.Record(ctx, "areme_provider_signer_cache_hit", cacheStart)
 			p.Logger.DebugfContext(ctx, "is me [%s]? yes, from cache", id)
-			result.Add(id.UniqueID())
+			result.Add(uid)
+		} else if mine, ok := p.areMeCache.Get(uid); ok {
+			phase.Record(ctx, "areme_provider_signer_cache_hit", cacheStart)
+			if mine {
+				result.Add(uid)
+			}
 		} else {
 			phase.Record(ctx, "areme_provider_signer_cache_miss", cacheStart)
 			notFound = append(notFound, id)
@@ -260,7 +273,7 @@ func (p *Provider) areMe(ctx context.Context, identities ...driver.Identity) []s
 		return result.ToSlice()
 	}
 
-	// check Storage
+	// check Storage and memoize both outcomes
 	storageStart := time.Now()
 	found, err := p.storage.GetExistingSignerInfo(ctx, notFound...)
 	phase.Record(ctx, "areme_get_existing_signer_info", storageStart)
@@ -268,6 +281,10 @@ func (p *Provider) areMe(ctx context.Context, identities ...driver.Identity) []s
 		p.Logger.Errorf("failed checking if a signer exists [%s]", err)
 
 		return result.ToSlice()
+	}
+	foundSet := collections.NewSet(found...)
+	for _, id := range notFound {
+		p.areMeCache.Add(id.UniqueID(), foundSet.Contains(id.UniqueID()))
 	}
 	result.Add(found...)
 
@@ -333,6 +350,8 @@ func (p *Provider) getSignerAndCache(ctx context.Context, identity driver.Identi
 	if err := p.storage.StoreSignerInfo(ctx, identity, nil); err != nil {
 		return nil, false, errors.Wrap(err, "failed to store entry in Storage for the passed signer")
 	}
+	// keep the AreMe memo in sync with storage truth
+	p.areMeCache.Add(idHash, true)
 
 	return signer, shouldCache, nil
 }
@@ -349,8 +368,11 @@ func (p *Provider) updateCaches(descriptor *idriver.IdentityDescriptor, alias dr
 			entry.DebugStack = debug.Stack()
 		}
 		p.signers.Add(id, entry)
+		// overwrite any memoized negative AreMe lookup for this identity
+		p.areMeCache.Add(id, true)
 		if setAlias {
 			p.signers.Add(aliasID, entry)
+			p.areMeCache.Add(aliasID, true)
 		}
 	}
 }
