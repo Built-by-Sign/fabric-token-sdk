@@ -12,6 +12,7 @@ import (
 	"github.com/hyperledger-labs/fabric-token-sdk/token/core/common/encoding/asn1"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/core/zkatdlog/nogh/v1/crypto/rp"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/core/zkatdlog/nogh/v1/crypto/rp/csp"
+	executor "github.com/hyperledger-labs/fabric-token-sdk/token/core/zkatdlog/nogh/v1/crypto/rp/executor"
 	v1 "github.com/hyperledger-labs/fabric-token-sdk/token/core/zkatdlog/nogh/v1/setup"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/core/zkatdlog/nogh/v1/token"
 )
@@ -112,6 +113,12 @@ func NewCSPBasedProver(inputWitness, outputWitness []*token.Metadata, inputs, ou
 			coms[i] = outputs[i].Copy()
 			coms[i].Sub(commitmentToType)
 		}
+		// Prove-side default: parallelize per-output range proofs (a handful
+		// of tasks per call). Verify side keeps the serial default.
+		provider := pp.ExecutorProvider
+		if provider == nil {
+			provider = executor.UnboundedProvider{}
+		}
 		p.RangeCorrectness = csp.NewRangeCorrectnessProver(
 			coms,
 			values,
@@ -121,7 +128,7 @@ func NewCSPBasedProver(inputWitness, outputWitness []*token.Metadata, inputs, ou
 			pp.CSPRangeProofParams.RightGenerators,
 			pp.CSPRangeProofParams.BitLength,
 			math.Curves[pp.Curve],
-			pp.ExecutorProvider,
+			provider,
 		).WithTranscriptHeader(pp.CSPRangeProofParams.RPTranscriptHeader)
 	}
 
