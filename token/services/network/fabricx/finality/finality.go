@@ -519,7 +519,11 @@ func (n *NSListenerManager) resolveBatch(ctx context.Context, statuses map[strin
 			continue
 		}
 		n.mu.Lock()
-		delete(n.pending, t.txID)
+		// Delete only if the entry is still ours: a re-registration for the
+		// same txID may have replaced it between the snapshot and now.
+		if cur, ok := n.pending[t.txID]; ok && cur == t.p {
+			delete(n.pending, t.txID)
+		}
 		n.mu.Unlock()
 	}
 }
