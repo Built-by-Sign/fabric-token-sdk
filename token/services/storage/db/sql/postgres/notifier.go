@@ -73,6 +73,9 @@ type Notifier struct {
 	// channelName is the name of the channel on which to receive notifications.
 	// It must be smaller than 63 characters per Postgres limit
 	channelName string
+	// ensureSchema installs the notification trigger on first subscription.
+	// Set by NewNotifier to CreateSchema; tests may leave it nil to skip DDL.
+	ensureSchema func() error
 }
 
 var logger = logging.MustGetLogger()
@@ -139,6 +142,7 @@ func NewNotifier(
 		closed:           false,
 		channelName:      channelName,
 	}
+	n.ensureSchema = n.CreateSchema
 
 	// attach handler that calls the subscribers
 	n.listener.Handle(channelName, &notificationHandler{
@@ -191,6 +195,20 @@ func (db *Notifier) Subscribe(callback driver.TriggerCallback) error {
 	db.startOnce.Do(func() {
 		justStarted = true
 		logger.Debugf("First subscription for notifier of [%s]. Notifier starts listening...", db.table)
+		// The notification trigger is installed on first subscription rather
+		// than at store creation: tables nobody subscribes to must not pay
+		// the per-row pg_notify cost (NOTIFY serializes transaction commits
+		// on a global queue lock).
+		if db.ensureSchema != nil {
+			if err := db.ensureSchema(); err != nil {
+				select {
+				case db.listenerErr <- errors.Wrapf(err, "failed creating notification schema for [%s]", db.table):
+				default:
+				}
+
+				return
+			}
+		}
 		db.listenerWg.Go(func() {
 			if err := db.listener.Listen(db.ctx); err != nil {
 				// Send error to both the error channel and log it

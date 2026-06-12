@@ -111,9 +111,6 @@ func newTokenStoreProvider(dbProvider fscPostgres.DbProvider) lazy.Provider[fscP
 			if err := p.CreateSchema(); err != nil {
 				return nil, err
 			}
-			if err := notifier.CreateSchema(); err != nil {
-				return nil, err
-			}
 		}
 
 		return p, nil
@@ -151,17 +148,8 @@ func newIdentityStoreProvider(dbProvider fscPostgres.DbProvider) lazy.Provider[f
 			return nil, err
 		}
 
-		// Get notifier for schema creation
-		notifier, err := NewIdentityNotifier(dbs, tableNames, o.DataSource)
-		if err != nil {
-			return nil, err
-		}
-
 		if !o.SkipCreateTable {
 			if err := p.CreateSchema(); err != nil {
-				return nil, err
-			}
-			if err := notifier.CreateSchema(); err != nil {
 				return nil, err
 			}
 		}
@@ -208,9 +196,6 @@ func newTransactionStoreProvider(dbProvider fscPostgres.DbProvider) lazy.Provide
 		}
 		if !o.SkipCreateTable {
 			if err := p.CreateSchema(); err != nil {
-				return nil, err
-			}
-			if err := notifier.CreateSchema(); err != nil {
 				return nil, err
 			}
 		}

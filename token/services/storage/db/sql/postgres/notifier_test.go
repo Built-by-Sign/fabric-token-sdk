@@ -68,6 +68,67 @@ func TestNotifierSubscribeError(t *testing.T) {
 	require.Contains(t, err.Error(), "listener failed to start")
 }
 
+// TestNotifierSubscribeInstallsSchemaOnce tests that the notification schema
+// (trigger) is installed lazily on the first subscription only.
+func TestNotifierSubscribeInstallsSchemaOnce(t *testing.T) {
+	var schemaCalls int
+	listenStarted := make(chan struct{}, 1)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	db := &Notifier{
+		table: "test_table",
+		listener: &mockListener{
+			ListenFN: func(ctx context.Context) error {
+				listenStarted <- struct{}{}
+				<-ctx.Done()
+
+				return ctx.Err()
+			},
+		},
+		listenerErr: make(chan error, 1),
+		ctx:         ctx,
+		cancel:      cancel,
+	}
+	db.ensureSchema = func() error {
+		require.Zero(t, len(listenStarted), "schema must be installed before the listener starts")
+		schemaCalls++
+
+		return nil
+	}
+
+	for range 3 {
+		require.NoError(t, db.Subscribe(func(driver.Operation, map[driver.ColumnKey]string) {}))
+	}
+	require.Equal(t, 1, schemaCalls, "schema must be installed exactly once, on first subscription")
+}
+
+// TestNotifierSubscribeSchemaError tests that Subscribe surfaces a schema
+// installation failure and does not start the listener.
+func TestNotifierSubscribeSchemaError(t *testing.T) {
+	var listenCalled bool
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	db := &Notifier{
+		table: "test_table",
+		listener: &mockListener{
+			ListenFN: func(ctx context.Context) error {
+				listenCalled = true
+
+				return nil
+			},
+		},
+		listenerErr: make(chan error, 1),
+		ctx:         ctx,
+		cancel:      cancel,
+	}
+	db.ensureSchema = func() error { return errors.New("no DDL permissions") }
+
+	err := db.Subscribe(func(driver.Operation, map[driver.ColumnKey]string) {})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no DDL permissions")
+	require.False(t, listenCalled, "listener must not start when schema installation fails")
+}
+
 // TestNotifierSubscribeClosed tests that Subscribe returns an error when notifier is closed
 func TestNotifierSubscribeClosed(t *testing.T) {
 	db := &Notifier{
