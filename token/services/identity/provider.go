@@ -12,11 +12,11 @@ import (
 	"time"
 
 	"github.com/hyperledger-labs/fabric-smart-client/pkg/utils/errors"
-	"github.com/hyperledger-labs/fabric-smart-client/platform/common/utils/cache/secondcache"
 	"github.com/hyperledger-labs/fabric-smart-client/platform/common/utils/collections"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/driver"
 	idriver "github.com/hyperledger-labs/fabric-token-sdk/token/services/identity/driver"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/logging"
+	utilscache "github.com/hyperledger-labs/fabric-token-sdk/token/services/utils/cache"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/utils/phase"
 	"go.uber.org/zap/zapcore"
 )
@@ -108,11 +108,24 @@ func NewProvider(
 		enrollmentIDUnmarshaler: enrollmentIDUnmarshaler,
 		deserializer:            deserializer,
 		storage:                 storage,
-		// 50 thrashes immediately with hundreds of thousands of wallet
-		// identities; size for the hot set instead.
-		signers:    secondcache.NewTyped[*SignerEntry](65536),
-		areMeCache: secondcache.NewTyped[bool](65536),
+		// Sized for the hot set (hundreds of thousands of wallet identities;
+		// the previous 50-entry cache thrashed immediately). Ristretto, not
+		// secondcache: secondcache's eviction sweeps size/3 entries under its
+		// global write lock per full-cache Add, which stalls every identity
+		// path at these sizes.
+		signers:    mustRistretto[*SignerEntry](65536),
+		areMeCache: mustRistretto[bool](65536),
 	}
+}
+
+// mustRistretto builds a ristretto-backed cache; the constructor only fails
+// on invalid static configuration, so failure here is a programming error.
+func mustRistretto[T any](size int64) cache[T] {
+	c, err := utilscache.NewRistrettoCacheWithSize[T](size)
+	if err != nil {
+		panic(err)
+	}
+	return c
 }
 
 // RegisterRecipientData stores the passed recipient data in the configured storage.
