@@ -646,9 +646,12 @@ func (w *TransactionStoreTransaction) AddTokenRequest(ctx context.Context, txID 
 		return errors.New("error marshaling application metadata")
 	}
 
+	// Idempotent: a retried request-approval for the same tx re-appends the
+	// same row; keep the first one instead of failing on the tx_id PK.
 	query, args := q.InsertInto(w.table.Requests).
 		Fields("tx_id", "request", "status", "status_message", "application_metadata", "public_metadata", "pp_hash", "stored_at").
 		Row(txID, tr, dbdriver.Pending, "", ja, jp, ppHash, time.Now().UTC()).
+		OnConflictDoNothing().
 		Format()
 	logging.Debug(logger, query, txID, fmt.Sprintf("(%d bytes)", len(tr)), len(applicationMetadata), len(publicMetadata), len(ppHash))
 	_, err = w.txn.ExecContext(ctx, query, args...)
@@ -702,9 +705,11 @@ func (w *TransactionStoreTransaction) AddValidationRecord(ctx context.Context, t
 	}
 	now := time.Now().UTC()
 
+	// Idempotent for retried request-approvals, mirroring AddTokenRequest.
 	query, args := q.InsertInto(w.table.Validations).
 		Fields("tx_id", "metadata", "stored_at").
 		Row(txID, md, now).
+		OnConflictDoNothing().
 		Format()
 	logging.Debug(logger, query, txID, len(md), now)
 
