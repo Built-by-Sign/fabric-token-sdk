@@ -347,6 +347,13 @@ func (d *StoreService) GetTokenRequests(ctx context.Context, txIDs []string) (ma
 	return d.db.GetTokenRequests(ctx, txIDs)
 }
 
+// GetStatuses returns the statuses of the given transactions in a single
+// query. Missing tx ids are absent from the returned map — callers should
+// treat a missing key as Unknown.
+func (d *StoreService) GetStatuses(ctx context.Context, txIDs []string) (map[string]dbdriver.TxStatusRecord, error) {
+	return d.db.GetStatuses(ctx, txIDs)
+}
+
 // AcquireLocks acquires locks for the passed anchor and enrollment ids.
 // This can be used to prevent concurrent read/write access to the audit records of the passed enrollment ids.
 // The function respects context cancellation and deadlines, returning an error if the context is cancelled

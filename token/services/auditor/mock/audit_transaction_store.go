@@ -66,6 +66,20 @@ type AuditTransactionStore struct {
 		result2 string
 		result3 error
 	}
+	GetStatusesStub        func(context.Context, []string) (map[string]driver.TxStatusRecord, error)
+	getStatusesMutex       sync.RWMutex
+	getStatusesArgsForCall []struct {
+		arg1 context.Context
+		arg2 []string
+	}
+	getStatusesReturns struct {
+		result1 map[string]driver.TxStatusRecord
+		result2 error
+	}
+	getStatusesReturnsOnCall map[int]struct {
+		result1 map[string]driver.TxStatusRecord
+		result2 error
+	}
 	GetTokenRequestStub        func(context.Context, string) ([]byte, error)
 	getTokenRequestMutex       sync.RWMutex
 	getTokenRequestArgsForCall []struct {
@@ -105,6 +119,17 @@ type AuditTransactionStore struct {
 	newTransactionStoreTransactionReturnsOnCall map[int]struct {
 		result1 driver.TransactionStoreTransaction
 		result2 error
+	}
+	PrefixedTableNameStub        func(string) string
+	prefixedTableNameMutex       sync.RWMutex
+	prefixedTableNameArgsForCall []struct {
+		arg1 string
+	}
+	prefixedTableNameReturns struct {
+		result1 string
+	}
+	prefixedTableNameReturnsOnCall map[int]struct {
+		result1 string
 	}
 	QueryMovementsStub        func(context.Context, driver.QueryMovementsParams) ([]*driver.MovementRecord, error)
 	queryMovementsMutex       sync.RWMutex
@@ -190,17 +215,6 @@ type AuditTransactionStore struct {
 	}
 	setStatusReturnsOnCall map[int]struct {
 		result1 error
-	}
-	PrefixedTableNameStub        func(string) string
-	prefixedTableNameMutex       sync.RWMutex
-	prefixedTableNameArgsForCall []struct {
-		arg1 string
-	}
-	prefixedTableNameReturns struct {
-		result1 string
-	}
-	prefixedTableNameReturnsOnCall map[int]struct {
-		result1 string
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
@@ -460,6 +474,76 @@ func (fake *AuditTransactionStore) GetStatusReturnsOnCall(i int, result1 driver.
 	}{result1, result2, result3}
 }
 
+func (fake *AuditTransactionStore) GetStatuses(arg1 context.Context, arg2 []string) (map[string]driver.TxStatusRecord, error) {
+	var arg2Copy []string
+	if arg2 != nil {
+		arg2Copy = make([]string, len(arg2))
+		copy(arg2Copy, arg2)
+	}
+	fake.getStatusesMutex.Lock()
+	ret, specificReturn := fake.getStatusesReturnsOnCall[len(fake.getStatusesArgsForCall)]
+	fake.getStatusesArgsForCall = append(fake.getStatusesArgsForCall, struct {
+		arg1 context.Context
+		arg2 []string
+	}{arg1, arg2Copy})
+	stub := fake.GetStatusesStub
+	fakeReturns := fake.getStatusesReturns
+	fake.recordInvocation("GetStatuses", []interface{}{arg1, arg2Copy})
+	fake.getStatusesMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *AuditTransactionStore) GetStatusesCallCount() int {
+	fake.getStatusesMutex.RLock()
+	defer fake.getStatusesMutex.RUnlock()
+	return len(fake.getStatusesArgsForCall)
+}
+
+func (fake *AuditTransactionStore) GetStatusesCalls(stub func(context.Context, []string) (map[string]driver.TxStatusRecord, error)) {
+	fake.getStatusesMutex.Lock()
+	defer fake.getStatusesMutex.Unlock()
+	fake.GetStatusesStub = stub
+}
+
+func (fake *AuditTransactionStore) GetStatusesArgsForCall(i int) (context.Context, []string) {
+	fake.getStatusesMutex.RLock()
+	defer fake.getStatusesMutex.RUnlock()
+	argsForCall := fake.getStatusesArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *AuditTransactionStore) GetStatusesReturns(result1 map[string]driver.TxStatusRecord, result2 error) {
+	fake.getStatusesMutex.Lock()
+	defer fake.getStatusesMutex.Unlock()
+	fake.GetStatusesStub = nil
+	fake.getStatusesReturns = struct {
+		result1 map[string]driver.TxStatusRecord
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *AuditTransactionStore) GetStatusesReturnsOnCall(i int, result1 map[string]driver.TxStatusRecord, result2 error) {
+	fake.getStatusesMutex.Lock()
+	defer fake.getStatusesMutex.Unlock()
+	fake.GetStatusesStub = nil
+	if fake.getStatusesReturnsOnCall == nil {
+		fake.getStatusesReturnsOnCall = make(map[int]struct {
+			result1 map[string]driver.TxStatusRecord
+			result2 error
+		})
+	}
+	fake.getStatusesReturnsOnCall[i] = struct {
+		result1 map[string]driver.TxStatusRecord
+		result2 error
+	}{result1, result2}
+}
+
 func (fake *AuditTransactionStore) GetTokenRequest(arg1 context.Context, arg2 string) ([]byte, error) {
 	fake.getTokenRequestMutex.Lock()
 	ret, specificReturn := fake.getTokenRequestReturnsOnCall[len(fake.getTokenRequestArgsForCall)]
@@ -649,6 +733,67 @@ func (fake *AuditTransactionStore) NewTransactionStoreTransactionReturnsOnCall(i
 		result1 driver.TransactionStoreTransaction
 		result2 error
 	}{result1, result2}
+}
+
+func (fake *AuditTransactionStore) PrefixedTableName(arg1 string) string {
+	fake.prefixedTableNameMutex.Lock()
+	ret, specificReturn := fake.prefixedTableNameReturnsOnCall[len(fake.prefixedTableNameArgsForCall)]
+	fake.prefixedTableNameArgsForCall = append(fake.prefixedTableNameArgsForCall, struct {
+		arg1 string
+	}{arg1})
+	stub := fake.PrefixedTableNameStub
+	fakeReturns := fake.prefixedTableNameReturns
+	fake.recordInvocation("PrefixedTableName", []interface{}{arg1})
+	fake.prefixedTableNameMutex.Unlock()
+	if stub != nil {
+		return stub(arg1)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *AuditTransactionStore) PrefixedTableNameCallCount() int {
+	fake.prefixedTableNameMutex.RLock()
+	defer fake.prefixedTableNameMutex.RUnlock()
+	return len(fake.prefixedTableNameArgsForCall)
+}
+
+func (fake *AuditTransactionStore) PrefixedTableNameCalls(stub func(string) string) {
+	fake.prefixedTableNameMutex.Lock()
+	defer fake.prefixedTableNameMutex.Unlock()
+	fake.PrefixedTableNameStub = stub
+}
+
+func (fake *AuditTransactionStore) PrefixedTableNameArgsForCall(i int) string {
+	fake.prefixedTableNameMutex.RLock()
+	defer fake.prefixedTableNameMutex.RUnlock()
+	argsForCall := fake.prefixedTableNameArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *AuditTransactionStore) PrefixedTableNameReturns(result1 string) {
+	fake.prefixedTableNameMutex.Lock()
+	defer fake.prefixedTableNameMutex.Unlock()
+	fake.PrefixedTableNameStub = nil
+	fake.prefixedTableNameReturns = struct {
+		result1 string
+	}{result1}
+}
+
+func (fake *AuditTransactionStore) PrefixedTableNameReturnsOnCall(i int, result1 string) {
+	fake.prefixedTableNameMutex.Lock()
+	defer fake.prefixedTableNameMutex.Unlock()
+	fake.PrefixedTableNameStub = nil
+	if fake.prefixedTableNameReturnsOnCall == nil {
+		fake.prefixedTableNameReturnsOnCall = make(map[int]struct {
+			result1 string
+		})
+	}
+	fake.prefixedTableNameReturnsOnCall[i] = struct {
+		result1 string
+	}{result1}
 }
 
 func (fake *AuditTransactionStore) QueryMovements(arg1 context.Context, arg2 driver.QueryMovementsParams) ([]*driver.MovementRecord, error) {
@@ -1037,67 +1182,6 @@ func (fake *AuditTransactionStore) SetStatusReturnsOnCall(i int, result1 error) 
 	}
 	fake.setStatusReturnsOnCall[i] = struct {
 		result1 error
-	}{result1}
-}
-
-func (fake *AuditTransactionStore) PrefixedTableName(arg1 string) string {
-	fake.prefixedTableNameMutex.Lock()
-	ret, specificReturn := fake.prefixedTableNameReturnsOnCall[len(fake.prefixedTableNameArgsForCall)]
-	fake.prefixedTableNameArgsForCall = append(fake.prefixedTableNameArgsForCall, struct {
-		arg1 string
-	}{arg1})
-	stub := fake.PrefixedTableNameStub
-	fakeReturns := fake.prefixedTableNameReturns
-	fake.recordInvocation("PrefixedTableName", []interface{}{arg1})
-	fake.prefixedTableNameMutex.Unlock()
-	if stub != nil {
-		return stub(arg1)
-	}
-	if specificReturn {
-		return ret.result1
-	}
-	return fakeReturns.result1
-}
-
-func (fake *AuditTransactionStore) PrefixedTableNameCallCount() int {
-	fake.prefixedTableNameMutex.RLock()
-	defer fake.prefixedTableNameMutex.RUnlock()
-	return len(fake.prefixedTableNameArgsForCall)
-}
-
-func (fake *AuditTransactionStore) PrefixedTableNameCalls(stub func(string) string) {
-	fake.prefixedTableNameMutex.Lock()
-	defer fake.prefixedTableNameMutex.Unlock()
-	fake.PrefixedTableNameStub = stub
-}
-
-func (fake *AuditTransactionStore) PrefixedTableNameArgsForCall(i int) string {
-	fake.prefixedTableNameMutex.RLock()
-	defer fake.prefixedTableNameMutex.RUnlock()
-	argsForCall := fake.prefixedTableNameArgsForCall[i]
-	return argsForCall.arg1
-}
-
-func (fake *AuditTransactionStore) PrefixedTableNameReturns(result1 string) {
-	fake.prefixedTableNameMutex.Lock()
-	defer fake.prefixedTableNameMutex.Unlock()
-	fake.PrefixedTableNameStub = nil
-	fake.prefixedTableNameReturns = struct {
-		result1 string
-	}{result1}
-}
-
-func (fake *AuditTransactionStore) PrefixedTableNameReturnsOnCall(i int, result1 string) {
-	fake.prefixedTableNameMutex.Lock()
-	defer fake.prefixedTableNameMutex.Unlock()
-	fake.PrefixedTableNameStub = nil
-	if fake.prefixedTableNameReturnsOnCall == nil {
-		fake.prefixedTableNameReturnsOnCall = make(map[int]struct {
-			result1 string
-		})
-	}
-	fake.prefixedTableNameReturnsOnCall[i] = struct {
-		result1 string
 	}{result1}
 }
 

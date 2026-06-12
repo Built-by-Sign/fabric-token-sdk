@@ -77,6 +77,13 @@ var TxStatusMessage = map[TxStatus]string{
 	Orphan:    "Orphan",
 }
 
+// TxStatusRecord pairs a transaction status with its status message, as
+// returned by batch status lookups.
+type TxStatusRecord struct {
+	Status  TxStatus
+	Message string
+}
+
 // MovementRecord is a record of a movement of assets.
 // Given a Token Transaction, a movement record is created for each enrollment ID that participated in the transaction
 // and each token type that was transferred.

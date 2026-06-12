@@ -97,6 +97,10 @@ const (
 // in that action.
 type TransactionRecord = dbdriver.TransactionRecord
 
+// TxStatusRecord pairs a transaction status with its status message, as
+// returned by batch status lookups.
+type TxStatusRecord = dbdriver.TxStatusRecord
+
 // RecoveryClaim is the minimal projection of a pending transaction row
 // returned by ClaimPendingTransactions for recovery processing.
 type RecoveryClaim = dbdriver.RecoveryClaim
@@ -340,6 +344,13 @@ func (d *StoreService) GetTokenRequest(ctx context.Context, txID string) ([]byte
 // about missing-key semantics.
 func (d *StoreService) GetTokenRequests(ctx context.Context, txIDs []string) (map[string][]byte, error) {
 	return d.db.GetTokenRequests(ctx, txIDs)
+}
+
+// GetStatuses returns the statuses of the given transactions in a single
+// query. Missing tx ids are absent from the returned map — callers should
+// treat a missing key as Unknown.
+func (d *StoreService) GetStatuses(ctx context.Context, txIDs []string) (map[string]dbdriver.TxStatusRecord, error) {
+	return d.db.GetStatuses(ctx, txIDs)
 }
 
 // AddTransactionEndorsementAck records the signature of a given endorser for a given transaction

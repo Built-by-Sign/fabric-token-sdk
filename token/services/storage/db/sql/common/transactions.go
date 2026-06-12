@@ -273,6 +273,40 @@ func (db *TransactionStore) GetStatus(ctx context.Context, txID string) (dbdrive
 	return status, statusMessage, nil
 }
 
+// GetStatuses fetches the statuses of the given transactions in a single
+// SELECT. Missing tx ids are absent from the returned map — callers should
+// treat a missing key as Unknown. Empty input returns an empty map without
+// querying.
+func (db *TransactionStore) GetStatuses(ctx context.Context, txIDs []string) (map[string]dbdriver.TxStatusRecord, error) {
+	if len(txIDs) == 0 {
+		return map[string]dbdriver.TxStatusRecord{}, nil
+	}
+	query, args := q.Select().
+		FieldsByName("tx_id", "status", "status_message").
+		From(q.Table(db.table.Requests)).
+		Where(cond.In("tx_id", txIDs...)).
+		Format(db.ci)
+
+	logging.Debug(logger, query, args)
+	rows, err := db.readDB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer Close(rows)
+
+	result := make(map[string]dbdriver.TxStatusRecord, len(txIDs))
+	for rows.Next() {
+		var txID string
+		var record dbdriver.TxStatusRecord
+		if err := rows.Scan(&txID, &record.Status, &record.Message); err != nil {
+			return nil, err
+		}
+		result[txID] = record
+	}
+
+	return result, rows.Err()
+}
+
 func (db *TransactionStore) QueryValidations(ctx context.Context, params dbdriver.QueryValidationRecordsParams) (dbdriver.ValidationRecordsIterator, error) {
 	validationsTable, requestsTable := q.Table(db.table.Validations), q.Table(db.table.Requests)
 	query, args := q.Select().

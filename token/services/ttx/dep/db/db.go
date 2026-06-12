@@ -30,3 +30,7 @@ type PageTransactionsIterator = cdriver.PageIterator[*TransactionRecord]
 
 // TransactionStatusEvent models an event related to the status of a transaction
 type TransactionStatusEvent = storage.StatusEvent
+
+// TxStatusRecord pairs a transaction status with its status message, as
+// returned by batch status lookups.
+type TxStatusRecord = ttxdb.TxStatusRecord

@@ -49,6 +49,11 @@ type AuditTransactionStore interface {
 	// Empty input returns an empty map without touching the database.
 	GetTokenRequests(ctx context.Context, txIDs []string) (map[string][]byte, error)
 
+	// GetStatuses returns the statuses of the given transactions in a
+	// single query. Missing tx ids are absent from the returned map.
+	// Empty input returns an empty map without touching the database.
+	GetStatuses(ctx context.Context, txIDs []string) (map[string]TxStatusRecord, error)
+
 	// AcquireRecoveryLeadership tries to acquire the PostgreSQL advisory lock backing the sweeper leader election.
 	// If acquired is false, leadership was not obtained and the returned lease must be nil.
 	AcquireRecoveryLeadership(ctx context.Context, lockID int64) (RecoveryLeadership, bool, error)
