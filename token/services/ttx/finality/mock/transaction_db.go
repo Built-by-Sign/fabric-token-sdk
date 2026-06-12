@@ -36,6 +36,11 @@ type TransactionDB struct {
 		result1 driver.TransactionStoreTransaction
 		result2 error
 	}
+	NotifyStub        func(storage.StatusEvent)
+	notifyMutex       sync.RWMutex
+	notifyArgsForCall []struct {
+		arg1 storage.StatusEvent
+	}
 	SetStatusStub        func(context.Context, string, storage.TxStatus, string) error
 	setStatusMutex       sync.RWMutex
 	setStatusArgsForCall []struct {
@@ -173,6 +178,38 @@ func (fake *TransactionDB) NewTransactionReturnsOnCall(i int, result1 driver.Tra
 		result1 driver.TransactionStoreTransaction
 		result2 error
 	}{result1, result2}
+}
+
+func (fake *TransactionDB) Notify(arg1 storage.StatusEvent) {
+	fake.notifyMutex.Lock()
+	fake.notifyArgsForCall = append(fake.notifyArgsForCall, struct {
+		arg1 storage.StatusEvent
+	}{arg1})
+	stub := fake.NotifyStub
+	fake.recordInvocation("Notify", []interface{}{arg1})
+	fake.notifyMutex.Unlock()
+	if stub != nil {
+		fake.NotifyStub(arg1)
+	}
+}
+
+func (fake *TransactionDB) NotifyCallCount() int {
+	fake.notifyMutex.RLock()
+	defer fake.notifyMutex.RUnlock()
+	return len(fake.notifyArgsForCall)
+}
+
+func (fake *TransactionDB) NotifyCalls(stub func(storage.StatusEvent)) {
+	fake.notifyMutex.Lock()
+	defer fake.notifyMutex.Unlock()
+	fake.NotifyStub = stub
+}
+
+func (fake *TransactionDB) NotifyArgsForCall(i int) storage.StatusEvent {
+	fake.notifyMutex.RLock()
+	defer fake.notifyMutex.RUnlock()
+	argsForCall := fake.notifyArgsForCall[i]
+	return argsForCall.arg1
 }
 
 func (fake *TransactionDB) SetStatus(arg1 context.Context, arg2 string, arg3 storage.TxStatus, arg4 string) error {

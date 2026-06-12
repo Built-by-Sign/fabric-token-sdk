@@ -31,6 +31,7 @@ type transactionDB interface {
 	NewTransaction() (dbdriver.TransactionStoreTransaction, error)
 	GetTokenRequest(ctx context.Context, txID string) ([]byte, error)
 	SetStatus(ctx context.Context, txID string, status storage.TxStatus, message string) error
+	Notify(event storage.StatusEvent)
 }
 
 // tokenRequestHasher defines the interface for processing token requests from raw bytes
@@ -223,6 +224,15 @@ func Commit(
 	}
 
 	tx = nil
+
+	// The transactional SetStatus above bypasses the store service, so push
+	// the status event explicitly — otherwise finality waiters only wake on
+	// the fallback poller.
+	ttxDB.Notify(storage.StatusEvent{
+		Ctx:            ctx,
+		TxID:           txID,
+		ValidationCode: driver.Confirmed,
+	})
 
 	return nil
 }
