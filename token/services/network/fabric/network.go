@@ -617,7 +617,7 @@ type transactionDB interface {
 	NewTransaction() (storage.TransactionStoreTransaction, error)
 	GetTokenRequest(ctx context.Context, txID string) ([]byte, error)
 	SetStatus(ctx context.Context, txID string, status storage.TxStatus, message string) error
-	Notify(event storage.StatusEvent)
+	NotifyStatus(ctx context.Context, txID string, status storage.TxStatus, message string)
 	AcquireRecoveryLeadership(ctx context.Context, lockID int64) (recovery.Leadership, bool, error)
 	ClaimPendingTransactions(ctx context.Context, olderThan time.Duration, leaseDuration time.Duration, limit int, owner string) ([]*ttxdb.RecoveryClaim, error)
 	ReleaseRecoveryClaim(ctx context.Context, txID string, owner string, message string) error

@@ -63,10 +63,13 @@ type TransactionDB struct {
 	listenerTxIDsReturnsOnCall map[int]struct {
 		result1 []string
 	}
-	NotifyStub        func(db.TransactionStatusEvent)
-	notifyMutex       sync.RWMutex
-	notifyArgsForCall []struct {
-		arg1 db.TransactionStatusEvent
+	NotifyStatusStub        func(context.Context, string, token.TxStatus, string)
+	notifyStatusMutex       sync.RWMutex
+	notifyStatusArgsForCall []struct {
+		arg1 context.Context
+		arg2 string
+		arg3 token.TxStatus
+		arg4 string
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
@@ -329,36 +332,39 @@ func (fake *TransactionDB) ListenerTxIDsReturnsOnCall(i int, result1 []string) {
 	}{result1}
 }
 
-func (fake *TransactionDB) Notify(arg1 db.TransactionStatusEvent) {
-	fake.notifyMutex.Lock()
-	fake.notifyArgsForCall = append(fake.notifyArgsForCall, struct {
-		arg1 db.TransactionStatusEvent
-	}{arg1})
-	stub := fake.NotifyStub
-	fake.recordInvocation("Notify", []interface{}{arg1})
-	fake.notifyMutex.Unlock()
+func (fake *TransactionDB) NotifyStatus(arg1 context.Context, arg2 string, arg3 token.TxStatus, arg4 string) {
+	fake.notifyStatusMutex.Lock()
+	fake.notifyStatusArgsForCall = append(fake.notifyStatusArgsForCall, struct {
+		arg1 context.Context
+		arg2 string
+		arg3 token.TxStatus
+		arg4 string
+	}{arg1, arg2, arg3, arg4})
+	stub := fake.NotifyStatusStub
+	fake.recordInvocation("NotifyStatus", []interface{}{arg1, arg2, arg3, arg4})
+	fake.notifyStatusMutex.Unlock()
 	if stub != nil {
-		fake.NotifyStub(arg1)
+		fake.NotifyStatusStub(arg1, arg2, arg3, arg4)
 	}
 }
 
-func (fake *TransactionDB) NotifyCallCount() int {
-	fake.notifyMutex.RLock()
-	defer fake.notifyMutex.RUnlock()
-	return len(fake.notifyArgsForCall)
+func (fake *TransactionDB) NotifyStatusCallCount() int {
+	fake.notifyStatusMutex.RLock()
+	defer fake.notifyStatusMutex.RUnlock()
+	return len(fake.notifyStatusArgsForCall)
 }
 
-func (fake *TransactionDB) NotifyCalls(stub func(db.TransactionStatusEvent)) {
-	fake.notifyMutex.Lock()
-	defer fake.notifyMutex.Unlock()
-	fake.NotifyStub = stub
+func (fake *TransactionDB) NotifyStatusCalls(stub func(context.Context, string, token.TxStatus, string)) {
+	fake.notifyStatusMutex.Lock()
+	defer fake.notifyStatusMutex.Unlock()
+	fake.NotifyStatusStub = stub
 }
 
-func (fake *TransactionDB) NotifyArgsForCall(i int) db.TransactionStatusEvent {
-	fake.notifyMutex.RLock()
-	defer fake.notifyMutex.RUnlock()
-	argsForCall := fake.notifyArgsForCall[i]
-	return argsForCall.arg1
+func (fake *TransactionDB) NotifyStatusArgsForCall(i int) (context.Context, string, token.TxStatus, string) {
+	fake.notifyStatusMutex.RLock()
+	defer fake.notifyStatusMutex.RUnlock()
+	argsForCall := fake.notifyStatusArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3, argsForCall.arg4
 }
 
 func (fake *TransactionDB) Invocations() map[string][][]interface{} {

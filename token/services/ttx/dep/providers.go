@@ -144,7 +144,7 @@ type TransactionDB interface {
 	AddStatusListener(txID string, ch chan db.TransactionStatusEvent)
 	DeleteStatusListener(txID string, ch chan db.TransactionStatusEvent)
 	ListenerTxIDs() []string
-	Notify(event db.TransactionStatusEvent)
+	NotifyStatus(ctx context.Context, txID string, status token.TxStatus, message string)
 }
 
 // TransactionDBProvider is used to retrieves instances of TransactionDB
@@ -178,7 +178,7 @@ type AuditDB interface {
 	AddStatusListener(txID string, ch chan db.TransactionStatusEvent)
 	DeleteStatusListener(txID string, ch chan db.TransactionStatusEvent)
 	ListenerTxIDs() []string
-	Notify(event db.TransactionStatusEvent)
+	NotifyStatus(ctx context.Context, txID string, status token.TxStatus, message string)
 }
 
 // AuditDBProvider is used to retrieves instances of AuditDB

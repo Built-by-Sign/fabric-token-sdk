@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/storage/ttxdb"
-	"github.com/hyperledger-labs/fabric-token-sdk/token/services/ttx/dep/db"
 )
 
 const (
@@ -80,12 +79,7 @@ func (p *statusPoller) sweep() {
 			if record.Status != ttxdb.Confirmed && record.Status != ttxdb.Deleted {
 				continue
 			}
-			p.db.Notify(db.TransactionStatusEvent{
-				Ctx:               ctx,
-				TxID:              txID,
-				ValidationCode:    record.Status,
-				ValidationMessage: record.Message,
-			})
+			p.db.NotifyStatus(ctx, txID, record.Status, record.Message)
 		}
 	}
 }

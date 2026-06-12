@@ -23,7 +23,7 @@ type finalityDB interface {
 	AddStatusListener(txID string, ch chan db.TransactionStatusEvent)
 	DeleteStatusListener(txID string, ch chan db.TransactionStatusEvent)
 	ListenerTxIDs() []string
-	Notify(event db.TransactionStatusEvent)
+	NotifyStatus(ctx context.Context, txID string, status TxStatus, message string)
 	GetStatus(ctx context.Context, txID string) (TxStatus, string, error)
 	GetStatuses(ctx context.Context, txIDs []string) (map[string]db.TxStatusRecord, error)
 }

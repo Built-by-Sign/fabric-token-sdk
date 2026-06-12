@@ -231,10 +231,10 @@ func TestCommit_NotifiesConfirmed(t *testing.T) {
 	assert.Equal(t, storage.Confirmed, txStatus)
 	require.Equal(t, 1, storeTx.CommitCallCount())
 
-	require.Equal(t, 1, db.NotifyCallCount(), "commit must push the Confirmed event to waiters")
-	event := db.NotifyArgsForCall(0)
-	assert.Equal(t, "tx1", event.TxID)
-	assert.Equal(t, storage.Confirmed, event.ValidationCode)
+	require.Equal(t, 1, db.NotifyStatusCallCount(), "commit must push the Confirmed event to waiters")
+	_, notifiedTxID, notifiedStatus, _ := db.NotifyStatusArgsForCall(0)
+	assert.Equal(t, "tx1", notifiedTxID)
+	assert.Equal(t, storage.Confirmed, notifiedStatus)
 }
 
 // TestCommit_NoNotifyOnCommitFailure verifies no status event is pushed when
@@ -246,7 +246,7 @@ func TestCommit_NoNotifyOnCommitFailure(t *testing.T) {
 	db.NewTransactionReturns(storeTx, nil)
 
 	require.Error(t, finality.Commit(t.Context(), logging.MustGetLogger(), &mock.TokensService{}, db, "tx1", nil))
-	assert.Equal(t, 0, db.NotifyCallCount(), "a failed commit must not wake waiters")
+	assert.Equal(t, 0, db.NotifyStatusCallCount(), "a failed commit must not wake waiters")
 }
 
 // TestOnError tests the OnError callback

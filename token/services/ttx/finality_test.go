@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package ttx_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -20,6 +21,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// notifyStatusVia adapts the flat NotifyStatus mock signature to a
+// StatusSupport's event-based Notify, so poller pushes reach the channels the
+// view registered on the same support.
+func notifyStatusVia(support *common.StatusSupport) func(context.Context, string, token.TxStatus, string) {
+	return func(ctx context.Context, txID string, status token.TxStatus, message string) {
+		support.Notify(common.StatusEvent{Ctx: ctx, TxID: txID, ValidationCode: status, ValidationMessage: message})
+	}
+}
 
 type testFinalityViewContext struct {
 	ctx                   *mock.Context
@@ -43,7 +53,7 @@ func newTestFinalityViewContext(t *testing.T) *testFinalityViewContext {
 	transactionDB.AddStatusListenerStub = transactionDBSupport.AddStatusListener
 	transactionDB.DeleteStatusListenerStub = transactionDBSupport.DeleteStatusListener
 	transactionDB.ListenerTxIDsStub = transactionDBSupport.ListenerTxIDs
-	transactionDB.NotifyStub = transactionDBSupport.Notify
+	transactionDB.NotifyStatusStub = notifyStatusVia(transactionDBSupport)
 	transactionDBProvider := &mock.TransactionDBProvider{}
 	transactionDBProvider.TransactionDBReturns(transactionDB, nil)
 
@@ -52,7 +62,7 @@ func newTestFinalityViewContext(t *testing.T) *testFinalityViewContext {
 	auditDB.AddStatusListenerStub = auditDBSupport.AddStatusListener
 	auditDB.DeleteStatusListenerStub = auditDBSupport.DeleteStatusListener
 	auditDB.ListenerTxIDsStub = auditDBSupport.ListenerTxIDs
-	auditDB.NotifyStub = auditDBSupport.Notify
+	auditDB.NotifyStatusStub = notifyStatusVia(auditDBSupport)
 	auditDBProvider := &mock.AuditDBProvider{}
 	auditDBProvider.AuditDBReturns(auditDB, nil)
 
