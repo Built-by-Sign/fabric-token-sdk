@@ -81,6 +81,7 @@ type Service struct {
 	finalityTracer  trace.Tracer
 	metricsProvider metrics.Provider
 	metrics         *Metrics
+	finalityMetrics *finality.Metrics
 	checkService    CheckService
 }
 
@@ -104,6 +105,7 @@ func NewService(
 		finalityTracer:  finalityTracer,
 		metricsProvider: metricsProvider,
 		metrics:         newMetrics(metricsProvider),
+		finalityMetrics: finality.NewMetrics(metricsProvider),
 		checkService:    checkService,
 	}
 }
@@ -211,7 +213,7 @@ func (a *Service) appendImpl(ctx context.Context, tx Transaction, cachedRecord *
 		a.auditDB,
 		a.tokenDB,
 		a.finalityTracer,
-		a.metricsProvider,
+		a.finalityMetrics,
 	)
 	if err := runPhase(ctx, "av_append_add_listener", func(_ context.Context) error {
 		return net.AddFinalityListener(tx.Namespace(), tx.ID(), r)

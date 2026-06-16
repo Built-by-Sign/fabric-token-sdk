@@ -19,6 +19,7 @@ import (
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/storage/ttxdb"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/tokens"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/ttx/dep"
+	"github.com/hyperledger-labs/fabric-token-sdk/token/services/ttx/finality"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -75,6 +76,7 @@ func NewServiceManager(
 					LabelNames: []tracing.LabelName{txIdLabel},
 				})),
 				metricsProvider: metricsProvider,
+				finalityMetrics: finality.NewMetrics(metricsProvider),
 				checkService:    checkService,
 			}
 			_, err = networkProvider.GetNetwork(tmsID.Network, tmsID.Channel)

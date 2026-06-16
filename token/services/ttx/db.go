@@ -47,6 +47,7 @@ type Service struct {
 	tmsProvider     dep.TokenManagementServiceProvider
 	finalityTracer  trace.Tracer
 	metricsProvider metrics.Provider
+	finalityMetrics *finality.Metrics
 	checkService    CheckService
 }
 
@@ -75,7 +76,7 @@ func (a *Service) Append(ctx context.Context, tx *Transaction) error {
 			a.ttxStoreService,
 			a.tokensService,
 			a.finalityTracer,
-			a.metricsProvider,
+			a.finalityMetrics,
 		),
 	); err != nil {
 		return errors.WithMessagef(err, "failed listening to network [%s:%s]", tx.Network(), tx.Channel())

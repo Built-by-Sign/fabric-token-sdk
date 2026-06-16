@@ -13,7 +13,6 @@ import (
 
 	"github.com/hyperledger-labs/fabric-smart-client/pkg/utils/errors"
 	"github.com/hyperledger-labs/fabric-token-sdk/token"
-	"github.com/hyperledger-labs/fabric-token-sdk/token/core/common/metrics"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/driver"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/logging"
 	"github.com/hyperledger-labs/fabric-token-sdk/token/services/network"
@@ -61,6 +60,10 @@ type Listener struct {
 	retryRunner utils.RetryRunner
 }
 
+// NewListener builds a finality Listener. metrics is shared across every
+// listener a Service creates and must be built once via NewMetrics; a nil
+// metrics installs a no-op. Building metrics per listener would re-register
+// the same Prometheus collectors on every transaction.
 func NewListener(
 	logger logging.Logger,
 	net dep.Network,
@@ -69,8 +72,11 @@ func NewListener(
 	ttxDB transactionDB,
 	tokens tokensService,
 	tracer trace.Tracer,
-	metricsProvider metrics.Provider,
+	metrics *Metrics,
 ) *Listener {
+	if metrics == nil {
+		metrics = newMetrics(nil)
+	}
 	return &Listener{
 		logger:      logger,
 		net:         net,
@@ -79,7 +85,7 @@ func NewListener(
 		ttxDB:       ttxDB,
 		tokens:      tokens,
 		tracer:      tracer,
-		metrics:     newMetrics(metricsProvider),
+		metrics:     metrics,
 		retryRunner: utils.NewRetryRunner(logger, MaxRetry, time.Second, true),
 	}
 }
