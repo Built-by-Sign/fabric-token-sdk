@@ -12,28 +12,24 @@
         <meta name="author" content="LFDT Panurus">
       
       
-        <link rel="canonical" href="https://LFDT-Panurus.github.io/panurus/drivers/metrics/">
+        <link rel="canonical" href="https://LFDT-Panurus.github.io/panurus/services/storage/ttxdb/">
       
       
-        <link rel="prev" href="../extending_validator/">
       
       
-        <link rel="next" href="../benchmark/benchmark/">
-      
-      
-      <link rel="icon" href="../../assets/images/favicon.png">
+      <link rel="icon" href="../../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.0, mkdocs-material-9.5.39">
     
     
       
-        <title>Metrics - Panurus</title>
+        <title>Token Transactions DB - Panurus</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.8c3ca2c6.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.8c3ca2c6.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.06af60db.min.css">
       
       
 
@@ -52,7 +48,7 @@
       
     
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -78,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#driver-metrics" class="md-skip">
+        <a href="#token-transactions-db" class="md-skip">
           Skip to content
         </a>
       
@@ -92,7 +88,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="Panurus" class="md-header__button md-logo" aria-label="Panurus" data-md-component="logo">
+    <a href="../../.." title="Panurus" class="md-header__button md-logo" aria-label="Panurus" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -112,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Metrics
+              Token Transactions DB
             
           </span>
         </div>
@@ -221,7 +217,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../.." class="md-tabs__link">
+      <a href="../../.." class="md-tabs__link">
         
   
     
@@ -240,7 +236,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../tokensdk/" class="md-tabs__link">
+        <a href="../../../tokensdk/" class="md-tabs__link">
           
   
   Core Concepts
@@ -254,13 +250,11 @@
         
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../fabtoken/" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../../drivers/fabtoken/" class="md-tabs__link">
           
   
   Drivers
@@ -278,7 +272,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../services/auditor/" class="md-tabs__link">
+        <a href="../../auditor/" class="md-tabs__link">
           
   
   Services
@@ -296,7 +290,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../development/development/" class="md-tabs__link">
+        <a href="../../../development/development/" class="md-tabs__link">
           
   
   Development
@@ -312,7 +306,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../evolution_summary/" class="md-tabs__link">
+      <a href="../../../evolution_summary/" class="md-tabs__link">
         
   
     
@@ -346,7 +340,7 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Panurus" class="md-nav__button md-logo" aria-label="Panurus" data-md-component="logo">
+    <a href="../../.." title="Panurus" class="md-nav__button md-logo" aria-label="Panurus" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -376,7 +370,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
+      <a href="../../.." class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -438,7 +432,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tokensdk/" class="md-nav__link">
+      <a href="../../../tokensdk/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -459,7 +453,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tokenapi/" class="md-nav__link">
+      <a href="../../../tokenapi/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -480,7 +474,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../token_sdk_usage/" class="md-nav__link">
+      <a href="../../../token_sdk_usage/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -501,7 +495,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../driverapi/" class="md-nav__link">
+      <a href="../../../driverapi/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -522,7 +516,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/" class="md-nav__link">
+      <a href="../../../configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -543,7 +537,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../services/" class="md-nav__link">
+      <a href="../../" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -564,7 +558,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../upgradability/" class="md-nav__link">
+      <a href="../../../upgradability/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -585,7 +579,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../public_parameters/" class="md-nav__link">
+      <a href="../../../public_parameters/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -610,30 +604,27 @@
       
   
   
-    
   
   
-  
     
     
     
-      
-        
-        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
             
   
   <span class="md-ellipsis">
@@ -644,7 +635,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             Drivers
@@ -658,7 +649,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../fabtoken/" class="md-nav__link">
+      <a href="../../../drivers/fabtoken/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -679,7 +670,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../dlogwogh/" class="md-nav__link">
+      <a href="../../../drivers/dlogwogh/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -700,7 +691,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../extending_validator/" class="md-nav__link">
+      <a href="../../../drivers/extending_validator/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -718,30 +709,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    Metrics
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../../drivers/metrics/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -750,137 +721,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      Overview
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#approach" class="md-nav__link">
-    <span class="md-ellipsis">
-      Approach
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Approach">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#wiring" class="md-nav__link">
-    <span class="md-ellipsis">
-      Wiring
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#wrapped-services" class="md-nav__link">
-    <span class="md-ellipsis">
-      Wrapped Services
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Wrapped Services">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#issueservice" class="md-nav__link">
-    <span class="md-ellipsis">
-      IssueService
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#transferservice" class="md-nav__link">
-    <span class="md-ellipsis">
-      TransferService
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#auditorservice" class="md-nav__link">
-    <span class="md-ellipsis">
-      AuditorService
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#tokensservice" class="md-nav__link">
-    <span class="md-ellipsis">
-      TokensService
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#tokensupgradeservice" class="md-nav__link">
-    <span class="md-ellipsis">
-      TokensUpgradeService
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#metric-reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      Metric Reference
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#source" class="md-nav__link">
-    <span class="md-ellipsis">
-      Source
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -898,13 +738,10 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
@@ -913,7 +750,7 @@
         <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_5" >
         
           
-          <label class="md-nav__link" for="__nav_3_5" id="__nav_3_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
             
   
   <span class="md-ellipsis">
@@ -938,7 +775,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../benchmark/benchmark/" class="md-nav__link">
+      <a href="../../../drivers/benchmark/benchmark/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -959,7 +796,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../benchmark/tools/" class="md-nav__link">
+      <a href="../../../drivers/benchmark/tools/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1022,7 +859,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../benchmark/core/dlognogh/dlognogh/" class="md-nav__link">
+      <a href="../../../drivers/benchmark/core/dlognogh/dlognogh/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1043,7 +880,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../benchmark/core/dlognogh/dlognogh_architecture/" class="md-nav__link">
+      <a href="../../../drivers/benchmark/core/dlognogh/dlognogh_architecture/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1064,7 +901,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../benchmark/core/dlognogh/dlognogh_regression/" class="md-nav__link">
+      <a href="../../../drivers/benchmark/core/dlognogh/dlognogh_regression/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1085,7 +922,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../benchmark/core/dlognogh/transfer_BenchmarkSender_results/" class="md-nav__link">
+      <a href="../../../drivers/benchmark/core/dlognogh/transfer_BenchmarkSender_results/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1106,7 +943,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../benchmark/core/dlognogh/validator_transfer_profile/" class="md-nav__link">
+      <a href="../../../drivers/benchmark/core/dlognogh/validator_transfer_profile/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1177,7 +1014,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../benchmark/services/identity/idemix/" class="md-nav__link">
+      <a href="../../../drivers/benchmark/services/identity/idemix/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1263,7 +1100,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../services/auditor/" class="md-nav__link">
+      <a href="../../auditor/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1284,7 +1121,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../services/benchmark/" class="md-nav__link">
+      <a href="../../benchmark/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1305,7 +1142,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../services/certifier/" class="md-nav__link">
+      <a href="../../certifier/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1326,7 +1163,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../services/config/" class="md-nav__link">
+      <a href="../../config/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1347,7 +1184,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../services/identity/" class="md-nav__link">
+      <a href="../../identity/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1368,7 +1205,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../services/interop/" class="md-nav__link">
+      <a href="../../interop/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1389,7 +1226,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../services/network-ethereum/" class="md-nav__link">
+      <a href="../../network-ethereum/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1410,7 +1247,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../services/network-fabric/" class="md-nav__link">
+      <a href="../../network-fabric/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1431,7 +1268,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../services/network-fabricx/" class="md-nav__link">
+      <a href="../../network-fabricx/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1452,7 +1289,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../services/network/" class="md-nav__link">
+      <a href="../../network/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1473,7 +1310,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../services/nfttx/" class="md-nav__link">
+      <a href="../../nfttx/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1494,7 +1331,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../services/selector/" class="md-nav__link">
+      <a href="../../selector/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1557,7 +1394,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../services/storage/" class="md-nav__link">
+      <a href="../" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1578,7 +1415,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../services/storage/keystore_cleanup/" class="md-nav__link">
+      <a href="../keystore_cleanup/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1599,7 +1436,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../services/storage/recovery/" class="md-nav__link">
+      <a href="../recovery/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1628,7 +1465,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../services/tokens/" class="md-nav__link">
+      <a href="../../tokens/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1649,7 +1486,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../services/ttx/" class="md-nav__link">
+      <a href="../../ttx/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1719,7 +1556,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/development/" class="md-nav__link">
+      <a href="../../../development/development/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1740,7 +1577,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/general/" class="md-nav__link">
+      <a href="../../../development/general/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1761,7 +1598,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/idiomatic/" class="md-nav__link">
+      <a href="../../../development/idiomatic/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1782,7 +1619,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/mock/" class="md-nav__link">
+      <a href="../../../development/mock/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1803,7 +1640,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/linting/" class="md-nav__link">
+      <a href="../../../development/linting/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1824,7 +1661,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/makefile/" class="md-nav__link">
+      <a href="../../../development/makefile/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1845,7 +1682,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/monitoring/" class="md-nav__link">
+      <a href="../../../development/monitoring/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1866,7 +1703,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/storage/" class="md-nav__link">
+      <a href="../../../development/storage/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1887,7 +1724,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/testing/" class="md-nav__link">
+      <a href="../../../development/testing/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1908,7 +1745,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/tokengen/" class="md-nav__link">
+      <a href="../../../development/tokengen/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1929,7 +1766,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/tools/" class="md-nav__link">
+      <a href="../../../development/tools/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1950,7 +1787,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/versioning/" class="md-nav__link">
+      <a href="../../../development/versioning/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1971,7 +1808,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/ai_agents/" class="md-nav__link">
+      <a href="../../../development/ai_agents/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1992,7 +1829,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/documentation/" class="md-nav__link">
+      <a href="../../../development/documentation/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -2020,7 +1857,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evolution_summary/" class="md-nav__link">
+      <a href="../../../evolution_summary/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -2060,111 +1897,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#getting-started" class="md-nav__link">
     <span class="md-ellipsis">
-      Overview
+      Getting Started
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#approach" class="md-nav__link">
+  <a href="#append-token-requests" class="md-nav__link">
     <span class="md-ellipsis">
-      Approach
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Approach">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#wiring" class="md-nav__link">
-    <span class="md-ellipsis">
-      Wiring
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#wrapped-services" class="md-nav__link">
-    <span class="md-ellipsis">
-      Wrapped Services
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Wrapped Services">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#issueservice" class="md-nav__link">
-    <span class="md-ellipsis">
-      IssueService
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#transferservice" class="md-nav__link">
-    <span class="md-ellipsis">
-      TransferService
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#auditorservice" class="md-nav__link">
-    <span class="md-ellipsis">
-      AuditorService
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#tokensservice" class="md-nav__link">
-    <span class="md-ellipsis">
-      TokensService
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#tokensupgradeservice" class="md-nav__link">
-    <span class="md-ellipsis">
-      TokensUpgradeService
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#metric-reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      Metric Reference
+      Append Token Requests
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#source" class="md-nav__link">
+  <a href="#payments" class="md-nav__link">
     <span class="md-ellipsis">
-      Source
+      Payments
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#holdings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Holdings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transaction-records" class="md-nav__link">
+    <span class="md-ellipsis">
+      Transaction Records
     </span>
   </a>
   
@@ -2188,305 +1959,71 @@
   
 
 
-<h1 id="driver-metrics">Driver Metrics<a class="headerlink" href="#driver-metrics" title="Permanent link">&para;</a></h1>
-<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>Panurus provides a shared metrics layer for all driver service implementations.
-Rather than each driver embedding its own instrumentation, a set of <strong>decorator wrappers</strong> in
-<code>token/core/common/metrics/</code> transparently records Prometheus-style metrics around every
-driver service call. Both the FabToken and ZKAT-DLog drivers are wrapped identically,
-ensuring consistent observability regardless of the underlying token technology.</p>
-<h2 id="approach">Approach<a class="headerlink" href="#approach" title="Permanent link">&para;</a></h2>
-<p>The metrics layer follows the <strong>Decorator Pattern</strong>: each wrapper implements the same
-<code>driver.*Service</code> interface as the real service, delegates every call to the inner
-implementation, and records three metrics per method invocation:</p>
-<table>
-<thead>
-<tr>
-<th>Metric type</th>
-<th>What it captures</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>Counter</strong> (<code>*_operations_total</code>)</td>
-<td>Total number of method invocations</td>
-</tr>
-<tr>
-<td><strong>Histogram</strong> (<code>*_duration_seconds</code>)</td>
-<td>Execution duration of each call</td>
-</tr>
-<tr>
-<td><strong>Counter</strong> (<code>*_errors_total</code>)</td>
-<td>Total number of calls that returned an error</td>
-</tr>
-</tbody>
-</table>
-<p>All metrics carry four labels for multi-TMS filtering:</p>
-<table>
-<thead>
-<tr>
-<th>Label</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>network</code></td>
-<td>The Fabric network name</td>
-</tr>
-<tr>
-<td><code>channel</code></td>
-<td>The channel on which the TMS operates</td>
-</tr>
-<tr>
-<td><code>namespace</code></td>
-<td>The token namespace</td>
-</tr>
-<tr>
-<td><code>method</code></td>
-<td>The service method that was invoked (e.g., <code>Issue</code>, <code>Transfer</code>)</td>
-</tr>
-</tbody>
-</table>
-<h3 id="wiring">Wiring<a class="headerlink" href="#wiring" title="Permanent link">&para;</a></h3>
-<p>During driver initialization, each driver factory wraps its concrete services before
-returning the <code>TokenManagerService</code>:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Caller  →  Metrics Wrapper  →  Concrete Driver Service
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>           (records metrics)    (business logic only)
+<h1 id="token-transactions-db">Token Transactions DB<a class="headerlink" href="#token-transactions-db" title="Permanent link">&para;</a></h1>
+<p>The Token Transactions DB is a database of audited records. It is used to track the
+history of audited events. In particular, it is used to track payments, holdings,
+and transactions of any business party identified by a unique enrollment ID.</p>
+<h2 id="getting-started">Getting Started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
+<p>Each Token Transactions DB is bound to a wallet to be uniquely identifiable. 
+To get the instance of the Token Transactions DB bound to a given wallet, 
+use the following:</p>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="w">   </span><span class="nx">ttxDB</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">ttxdb</span><span class="p">.</span><span class="nx">Get</span><span class="p">(</span><span class="nx">context</span><span class="p">,</span><span class="w"> </span><span class="nx">wallet</span><span class="p">)</span>
 </span></code></pre></div>
-<p>This keeps business logic free of monitoring concerns and guarantees that any new driver
-automatically gets the same metrics by wrapping its services at construction time.</p>
-<h2 id="wrapped-services">Wrapped Services<a class="headerlink" href="#wrapped-services" title="Permanent link">&para;</a></h2>
-<p>Five driver services are wrapped:</p>
-<h3 id="issueservice">IssueService<a class="headerlink" href="#issueservice" title="Permanent link">&para;</a></h3>
-<p>Wraps <code>driver.IssueService</code>. Methods instrumented:</p>
-<table>
-<thead>
-<tr>
-<th>Method</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>Issue</code></td>
-<td>Create new tokens for one or more recipients</td>
-</tr>
-<tr>
-<td><code>VerifyIssue</code></td>
-<td>Validate an issue action against its output metadata</td>
-</tr>
-<tr>
-<td><code>DeserializeIssueAction</code></td>
-<td>Deserialize raw bytes into an <code>IssueAction</code></td>
-</tr>
-</tbody>
-</table>
-<p>Metrics emitted:
-- <code>issue_service_operations_total</code>
-- <code>issue_service_duration_seconds</code>
-- <code>issue_service_errors_total</code></p>
-<h3 id="transferservice">TransferService<a class="headerlink" href="#transferservice" title="Permanent link">&para;</a></h3>
-<p>Wraps <code>driver.TransferService</code>. Methods instrumented:</p>
-<table>
-<thead>
-<tr>
-<th>Method</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>Transfer</code></td>
-<td>Move token ownership from sender to receiver(s)</td>
-</tr>
-<tr>
-<td><code>VerifyTransfer</code></td>
-<td>Validate a transfer action against its output metadata</td>
-</tr>
-<tr>
-<td><code>DeserializeTransferAction</code></td>
-<td>Deserialize raw bytes into a <code>TransferAction</code></td>
-</tr>
-</tbody>
-</table>
-<p>Metrics emitted:
-- <code>transfer_service_operations_total</code>
-- <code>transfer_service_duration_seconds</code>
-- <code>transfer_service_errors_total</code></p>
-<h3 id="auditorservice">AuditorService<a class="headerlink" href="#auditorservice" title="Permanent link">&para;</a></h3>
-<p>Wraps <code>driver.AuditorService</code>. Methods instrumented:</p>
-<table>
-<thead>
-<tr>
-<th>Method</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>AuditorCheck</code></td>
-<td>Verify a token request and its metadata for regulatory compliance</td>
-</tr>
-</tbody>
-</table>
-<p>Metrics emitted:
-- <code>auditor_service_operations_total</code>
-- <code>auditor_service_duration_seconds</code>
-- <code>auditor_service_errors_total</code></p>
-<h3 id="tokensservice">TokensService<a class="headerlink" href="#tokensservice" title="Permanent link">&para;</a></h3>
-<p>Wraps <code>driver.TokensService</code>. Methods instrumented:</p>
-<table>
-<thead>
-<tr>
-<th>Method</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>SupportedTokenFormats</code></td>
-<td>Return the token formats the driver supports</td>
-</tr>
-<tr>
-<td><code>Deobfuscate</code></td>
-<td>Reveal the cleartext token from an opaque output and its metadata</td>
-</tr>
-<tr>
-<td><code>Recipients</code></td>
-<td>Extract the recipient identities from a token output</td>
-</tr>
-</tbody>
-</table>
-<p>Metrics emitted:
-- <code>tokens_service_operations_total</code>
-- <code>tokens_service_duration_seconds</code>
-- <code>tokens_service_errors_total</code></p>
-<h3 id="tokensupgradeservice">TokensUpgradeService<a class="headerlink" href="#tokensupgradeservice" title="Permanent link">&para;</a></h3>
-<p>Wraps <code>driver.TokensUpgradeService</code>. Methods instrumented:</p>
-<table>
-<thead>
-<tr>
-<th>Method</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>NewUpgradeChallenge</code></td>
-<td>Generate a random challenge for the upgrade protocol</td>
-</tr>
-<tr>
-<td><code>GenUpgradeProof</code></td>
-<td>Produce a zero-knowledge proof for a token upgrade</td>
-</tr>
-<tr>
-<td><code>CheckUpgradeProof</code></td>
-<td>Verify an upgrade proof against a challenge and tokens</td>
-</tr>
-</tbody>
-</table>
-<p>Metrics emitted:
-- <code>tokens_upgrade_service_operations_total</code>
-- <code>tokens_upgrade_service_duration_seconds</code>
-- <code>tokens_upgrade_service_errors_total</code></p>
-<h2 id="metric-reference">Metric Reference<a class="headerlink" href="#metric-reference" title="Permanent link">&para;</a></h2>
-<p>The full list of metrics emitted by the driver wrappers:</p>
-<table>
-<thead>
-<tr>
-<th>Metric Name</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>issue_service_operations_total</code></td>
-<td>Counter</td>
-<td>Total <code>IssueService</code> method invocations</td>
-</tr>
-<tr>
-<td><code>issue_service_duration_seconds</code></td>
-<td>Histogram</td>
-<td>Duration of <code>IssueService</code> method calls</td>
-</tr>
-<tr>
-<td><code>issue_service_errors_total</code></td>
-<td>Counter</td>
-<td>Total <code>IssueService</code> method errors</td>
-</tr>
-<tr>
-<td><code>transfer_service_operations_total</code></td>
-<td>Counter</td>
-<td>Total <code>TransferService</code> method invocations</td>
-</tr>
-<tr>
-<td><code>transfer_service_duration_seconds</code></td>
-<td>Histogram</td>
-<td>Duration of <code>TransferService</code> method calls</td>
-</tr>
-<tr>
-<td><code>transfer_service_errors_total</code></td>
-<td>Counter</td>
-<td>Total <code>TransferService</code> method errors</td>
-</tr>
-<tr>
-<td><code>auditor_service_operations_total</code></td>
-<td>Counter</td>
-<td>Total <code>AuditorService</code> method invocations</td>
-</tr>
-<tr>
-<td><code>auditor_service_duration_seconds</code></td>
-<td>Histogram</td>
-<td>Duration of <code>AuditorService</code> method calls</td>
-</tr>
-<tr>
-<td><code>auditor_service_errors_total</code></td>
-<td>Counter</td>
-<td>Total <code>AuditorService</code> method errors</td>
-</tr>
-<tr>
-<td><code>tokens_service_operations_total</code></td>
-<td>Counter</td>
-<td>Total <code>TokensService</code> method invocations</td>
-</tr>
-<tr>
-<td><code>tokens_service_duration_seconds</code></td>
-<td>Histogram</td>
-<td>Duration of <code>TokensService</code> method calls</td>
-</tr>
-<tr>
-<td><code>tokens_service_errors_total</code></td>
-<td>Counter</td>
-<td>Total <code>TokensService</code> method errors</td>
-</tr>
-<tr>
-<td><code>tokens_upgrade_service_operations_total</code></td>
-<td>Counter</td>
-<td>Total <code>TokensUpgradeService</code> method invocations</td>
-</tr>
-<tr>
-<td><code>tokens_upgrade_service_duration_seconds</code></td>
-<td>Histogram</td>
-<td>Duration of <code>TokensUpgradeService</code> method calls</td>
-</tr>
-<tr>
-<td><code>tokens_upgrade_service_errors_total</code></td>
-<td>Counter</td>
-<td>Total <code>TokensUpgradeService</code> method errors</td>
-</tr>
-</tbody>
-</table>
-<p>All metrics use labels: <code>network</code>, <code>channel</code>, <code>namespace</code>, <code>method</code>.</p>
-<h2 id="source">Source<a class="headerlink" href="#source" title="Permanent link">&para;</a></h2>
-<p>The wrapper implementations and their tests are located in:
-- <code>token/core/common/metrics/issue.go</code>
-- <code>token/core/common/metrics/transfer.go</code>
-- <code>token/core/common/metrics/auditor.go</code>
-- <code>token/core/common/metrics/tokens.go</code>
-- <code>token/core/common/metrics/upgrade.go</code>
-- <code>token/core/common/metrics/wrappers_test.go</code></p>
+<h2 id="append-token-requests">Append Token Requests<a class="headerlink" href="#append-token-requests" title="Permanent link">&para;</a></h2>
+<p>A Token Request describes a set of token operations in a backend agnostic language.
+A Token Request can be assembled directly using the Token API or by using service packages like 
+<a href="https://github.com/LFDT-Panurus/panurus/tree/main/token/services/ttx"><code>ttx</code></a>.</p>
+<p>Once a Token Request is assembled, it can be appended to the Token Transactions DB as follows:</p>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">ttxDB</span><span class="p">.</span><span class="nx">Append</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">tokenRequest</span><span class="p">);</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">errors</span><span class="p">.</span><span class="nx">WithMessagef</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;failed appending audit records for tx [%s]&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">tx</span><span class="p">.</span><span class="nx">ID</span><span class="p">())</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="p">}</span>
+</span></code></pre></div>
+<p>The above code will extract the movement records and the transaction records from the Token Request and append them to the Token Transactions DB.</p>
+<p>It is also possible to append just the transaction records corresponding to a given Token Request as follows:</p>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">ttxDB</span><span class="p">.</span><span class="nx">AppendTransactionRecord</span><span class="p">(</span><span class="nx">tokenRequest</span><span class="p">);</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">errors</span><span class="p">.</span><span class="nx">WithMessagef</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;failed appending audit records for tx [%s]&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">tx</span><span class="p">.</span><span class="nx">ID</span><span class="p">())</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="p">}</span>
+</span></code></pre></div>
+<h2 id="payments">Payments<a class="headerlink" href="#payments" title="Permanent link">&para;</a></h2>
+<p>The following example shows how to retrieve the total amount of last 10 payments made by a given 
+business party, identified by the corresponding enrollment ID, for a given token type.</p>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="w">    </span><span class="nx">filter</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">ttxDB</span><span class="p">.</span><span class="nx">NewPaymentsFilter</span><span class="p">()</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="nx">filter</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">filter</span><span class="p">.</span><span class="nx">ByEnrollmentId</span><span class="p">(</span><span class="nx">eID</span><span class="p">).</span><span class="nx">ByType</span><span class="p">(</span><span class="nx">tokenType</span><span class="p">).</span><span class="nx">Last</span><span class="p">(</span><span class="mi">10</span><span class="p">).</span><span class="nx">Execute</span><span class="p">()</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">errors</span><span class="p">.</span><span class="nx">WithMessagef</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;failed getting payments for enrollment id [%s] and token type [%s]&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">eID</span><span class="p">,</span><span class="w"> </span><span class="nx">tokenType</span><span class="p">)</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="nx">sumLastPayments</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">filter</span><span class="p">.</span><span class="nx">Sum</span><span class="p">()</span>
+</span></code></pre></div>
+<h2 id="holdings">Holdings<a class="headerlink" href="#holdings" title="Permanent link">&para;</a></h2>
+<p>The following example shows how to retrieve the current holding of a given token type for a given business party.
+Recall that the current holding is equal to the difference between inbound and outbound transactions over
+the entire history.</p>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="w">    </span><span class="nx">filter</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">ttxDB</span><span class="p">.</span><span class="nx">NewHoldingsFilter</span><span class="p">()</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">    </span><span class="nx">filter</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">filter</span><span class="p">.</span><span class="nx">ByEnrollmentId</span><span class="p">(</span><span class="nx">eID</span><span class="p">).</span><span class="nx">ByType</span><span class="p">(</span><span class="nx">tokenType</span><span class="p">).</span><span class="nx">Execute</span><span class="p">()</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">errors</span><span class="p">.</span><span class="nx">WithMessagef</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;failed getting holdings for enrollment id [%s] and token type [%s]&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">eID</span><span class="p">,</span><span class="w"> </span><span class="nx">tokenType</span><span class="p">)</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span><span class="nx">holding</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">filter</span><span class="p">.</span><span class="nx">Sum</span><span class="p">()</span>
+</span></code></pre></div>
+<h2 id="transaction-records">Transaction Records<a class="headerlink" href="#transaction-records" title="Permanent link">&para;</a></h2>
+<p>The following example shows how to retrieve the total amount of transactions for a given business party,</p>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="w">    </span><span class="nx">it</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">qe</span><span class="p">.</span><span class="nx">Transactions</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">ttxdb</span><span class="p">.</span><span class="nx">QueryTransactionsParams</span><span class="p">{</span><span class="nx">From</span><span class="p">:</span><span class="w"> </span><span class="nx">p</span><span class="p">.</span><span class="nx">From</span><span class="p">,</span><span class="w"> </span><span class="nx">To</span><span class="p">:</span><span class="w"> </span><span class="nx">p</span><span class="p">.</span><span class="nx">To</span><span class="p">})</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">errors</span><span class="p">.</span><span class="nx">WithMessagef</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;failed getting transactions for enrollment id [%s]&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">eID</span><span class="p">)</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="k">defer</span><span class="w"> </span><span class="nx">it</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">        </span><span class="nx">tx</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">it</span><span class="p">.</span><span class="nx">Next</span><span class="p">()</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nx">errors</span><span class="p">.</span><span class="nx">WithMessagef</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;failed getting transactions for enrollment id [%s]&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">eID</span><span class="p">)</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">        </span><span class="p">}</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="nx">tx</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">            </span><span class="k">break</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">        </span><span class="p">}</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">        </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;Transaction: %s\n&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">tx</span><span class="p">.</span><span class="nx">ID</span><span class="p">())</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">    </span><span class="p">}</span>
+</span></code></pre></div>
 
 
 
@@ -2539,10 +2076,10 @@ automatically gets the same metrics by wrapping its services at construction tim
     </div>
     
     
-    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.expand", "navigation.tracking", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    <script id="__config" type="application/json">{"base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.expand", "navigation.tracking", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.525ec568.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.525ec568.min.js"></script>
       
     
   </body>
