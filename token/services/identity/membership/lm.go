@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 
 	"github.com/LFDT-Panurus/panurus/token"
 	tdriver "github.com/LFDT-Panurus/panurus/token/driver"
@@ -24,6 +25,7 @@ import (
 	"github.com/hyperledger-labs/fabric-smart-client/platform/common/utils/collections"
 	"github.com/hyperledger-labs/fabric-smart-client/platform/view/view"
 	"go.yaml.in/yaml/v3"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -180,7 +182,21 @@ type LocalMembership struct {
 	targetIdentities          []view.Identity // optional list of identities to prefer
 	anonymous                 bool            // when true, only anonymous identities are considered selectable by default
 	closeOnce                 sync.Once
+
+	// reloadGroup collapses concurrent store reloads into one in-flight call;
+	// reloadGen lets a queued reload detect that a completed one already covers it.
+	reloadGroup singleflight.Group
+	reloadGen   atomic.Uint64
+	// notifierActive reports whether store-change notifications keep the index fresh.
+	// storeDirty marks that the store may hold configurations missing from the index;
+	// it is only consulted while notifierActive.
+	notifierActive atomic.Bool
+	storeDirty     atomic.Bool
 }
+
+// reloadSingleflightKey deduplicates concurrent refreshAndGet reloads; the
+// reload is label-independent, so one in-flight reload serves every lookup.
+const reloadSingleflightKey = "reload"
 
 // NewLocalMembership creates a new LocalMembership instance.
 // Parameters:
@@ -204,7 +220,7 @@ func NewLocalMembership(
 	identityProvider IdentityProvider,
 	keyManagerProviders ...KeyManagerProvider,
 ) *LocalMembership {
-	return &LocalMembership{
+	lm := &LocalMembership{
 		logger:                    logger.Named(identityType),
 		config:                    config,
 		defaultNetworkIdentity:    defaultNetworkIdentity,
@@ -218,6 +234,10 @@ func NewLocalMembership(
 		anonymous:                 defaultAnonymous,
 		IdentityProvider:          identityProvider,
 	}
+	// the index starts unsynchronized with the store
+	lm.storeDirty.Store(true)
+
+	return lm
 }
 
 // DefaultNetworkIdentity returns the root network identity used when binding loaded identities.
@@ -445,26 +465,32 @@ func (l *LocalMembership) subscribeNotifier() error {
 	if err != nil {
 		return errors.Wrapf(err, "failed to subscribe to notifier")
 	}
+	l.notifierActive.Store(true)
 
 	return nil
 }
 
+// handleConfig registers the store configuration a change notification points
+// at. Any failure marks the store dirty so the next miss falls back to a full
+// reload. The point query runs without the write lock.
 func (l *LocalMembership) handleConfig(id, typ, url string) {
-	l.localIdentitiesMutex.Lock()
-	defer l.localIdentitiesMutex.Unlock()
-
 	l.logger.Debugf("handle config for [%s:%s:%s]", id, typ, url)
 	config, err := l.identityDB.GetConfiguration(context.Background(), id, typ, url)
 	if err != nil {
+		l.storeDirty.Store(true)
 		l.logger.Errorf("failed to get configuration for [%s:%s:%s]: %s", id, typ, url, err)
 
 		return
 	}
 	if config == nil {
+		l.storeDirty.Store(true)
 		l.logger.Errorf("configuration not found for [%s:%s:%s]", id, typ, url)
 
 		return
 	}
+
+	l.localIdentitiesMutex.Lock()
+	defer l.localIdentitiesMutex.Unlock()
 
 	key := l.configKey(config)
 	if _, ok := l.localIdentitiesByConfig[key]; ok {
@@ -475,6 +501,7 @@ func (l *LocalMembership) handleConfig(id, typ, url string) {
 
 	l.logger.Debugf("load identity configuration [%+v]", config)
 	if err := l.registerIdentityConfiguration(context.Background(), config, false); err != nil {
+		l.storeDirty.Store(true)
 		l.logger.Errorf("failed loading identity with err [%s]", err)
 	}
 }
@@ -735,47 +762,77 @@ func (l *LocalMembership) addLocalIdentity(ctx context.Context, config *Identity
 	return nil
 }
 
+// refreshAndGet reconciles the in-memory index with the identity store and
+// looks the label up again. The store read runs outside the write lock and
+// concurrent reloads collapse into a single in-flight call; when change
+// notifications are active and none has failed, the store is not queried at
+// all — a miss cannot be resolved by reloading.
 func (l *LocalMembership) refreshAndGet(ctx context.Context, label string) *LocalIdentity {
-	l.localIdentitiesMutex.Lock()
-	defer l.localIdentitiesMutex.Unlock()
+	gen := l.reloadGen.Load()
 
-	// Double check
-	identities, ok := l.localIdentitiesByName[label]
-	if ok {
-		return identities[0].Identity
-	}
-	mapped, ok := l.localIdentitiesByIdentity[label]
-	if ok {
-		return mapped
+	// Double check: a reload since the caller's lookup may have registered the label.
+	l.localIdentitiesMutex.RLock()
+	res := l.lookupLabel(label)
+	l.localIdentitiesMutex.RUnlock()
+	if res != nil {
+		return res
 	}
 
-	l.logger.DebugfContext(ctx, "refresh and get local identity for label [%s]", utils.Hashable(label))
-	storedIdentityConfigurations, err := l.storedIdentityConfigurations(ctx)
-	if err != nil {
-		l.logger.ErrorfContext(ctx, "failed to load stored identity configurations: %s", err)
-
+	if l.notifierActive.Load() && !l.storeDirty.Load() {
 		return nil
 	}
 
-	for _, identityConfiguration := range storedIdentityConfigurations {
-		key := l.configKey(&identityConfiguration)
-		if _, ok := l.localIdentitiesByConfig[key]; ok {
-			continue
+	l.logger.DebugfContext(ctx, "refresh and get local identity for label [%s]", utils.Hashable(label))
+	_, _, _ = l.reloadGroup.Do(reloadSingleflightKey, func() (any, error) {
+		if l.reloadGen.Load() != gen {
+			// a reload completed after the caller's miss; the re-check below covers it
+			return nil, nil
 		}
 
-		l.logger.DebugfContext(ctx, "load identity configuration [%+v]", identityConfiguration)
-		if err := l.registerIdentityConfiguration(ctx, &identityConfiguration, false); err != nil {
-			l.logger.ErrorfContext(ctx, "failed loading identity with err [%s]", err)
-		}
-	}
+		// a change notification arriving from here on marks the store dirty
+		// again, so the next miss reloads
+		l.storeDirty.Store(false)
+		storedIdentityConfigurations, err := l.storedIdentityConfigurations(ctx)
+		if err != nil {
+			l.storeDirty.Store(true)
+			l.logger.ErrorfContext(ctx, "failed to load stored identity configurations: %s", err)
 
-	// check again
-	identities, ok = l.localIdentitiesByName[label]
-	if ok {
+			return nil, nil
+		}
+
+		l.localIdentitiesMutex.Lock()
+		defer l.localIdentitiesMutex.Unlock()
+		for _, identityConfiguration := range storedIdentityConfigurations {
+			key := l.configKey(&identityConfiguration)
+			if _, ok := l.localIdentitiesByConfig[key]; ok {
+				continue
+			}
+
+			l.logger.DebugfContext(ctx, "load identity configuration [%+v]", identityConfiguration)
+			if err := l.registerIdentityConfiguration(ctx, &identityConfiguration, false); err != nil {
+				// left out of the index; retried on the next reload
+				l.storeDirty.Store(true)
+				l.logger.ErrorfContext(ctx, "failed loading identity with err [%s]", err)
+			}
+		}
+		l.reloadGen.Add(1)
+
+		return nil, nil
+	})
+
+	l.localIdentitiesMutex.RLock()
+	defer l.localIdentitiesMutex.RUnlock()
+
+	return l.lookupLabel(label)
+}
+
+// lookupLabel returns the identity registered under label, by name or by
+// identity string. Callers must hold localIdentitiesMutex.
+func (l *LocalMembership) lookupLabel(label string) *LocalIdentity {
+	if identities, ok := l.localIdentitiesByName[label]; ok {
 		return identities[0].Identity
 	}
-	mapped, ok = l.localIdentitiesByIdentity[label]
-	if ok {
+	if mapped, ok := l.localIdentitiesByIdentity[label]; ok {
 		return mapped
 	}
 
