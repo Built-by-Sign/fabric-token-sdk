@@ -8,6 +8,8 @@ package wallet
 
 import (
 	"context"
+	"slices"
+	"sync"
 
 	tdriver "github.com/LFDT-Panurus/panurus/token/driver"
 	"github.com/LFDT-Panurus/panurus/token/services/identity"
@@ -51,6 +53,9 @@ type Service struct {
 	IdentityProvider tdriver.IdentityProvider
 	Deserializer     tdriver.Deserializer
 	RoleRegistries   RoleRegistries
+
+	ownerListenersMu sync.Mutex
+	ownerListeners   []func()
 }
 
 // NewService creates a new wallet Service.
@@ -70,7 +75,26 @@ func NewService(
 
 // RegisterOwnerIdentity registers a long-term owner identity using the owner registry.
 func (s *Service) RegisterOwnerIdentity(ctx context.Context, config tdriver.IdentityConfiguration) error {
-	return s.RoleRegistries[idriver.OwnerRole].RegisterIdentity(ctx, config)
+	if err := s.RoleRegistries[idriver.OwnerRole].RegisterIdentity(ctx, config); err != nil {
+		return err
+	}
+
+	s.ownerListenersMu.Lock()
+	listeners := slices.Clone(s.ownerListeners)
+	s.ownerListenersMu.Unlock()
+	for _, f := range listeners {
+		f()
+	}
+
+	return nil
+}
+
+// OnOwnerIdentityRegistered registers a callback invoked after each successful
+// owner-identity registration.
+func (s *Service) OnOwnerIdentityRegistered(f func()) {
+	s.ownerListenersMu.Lock()
+	defer s.ownerListenersMu.Unlock()
+	s.ownerListeners = append(s.ownerListeners, f)
 }
 
 // RegisterIssuerIdentity registers a long-term issuer identity using the issuer registry.

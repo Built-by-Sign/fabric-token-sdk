@@ -54,6 +54,22 @@ func TestRegisterIdentityDelegation(t *testing.T) {
 	require.Error(t, reqErr)
 }
 
+func TestRegisterOwnerIdentityNotifiesListeners(t *testing.T) {
+	ctx := t.Context()
+	reg := &wmock.RoleRegistry{}
+	s := wallet.NewService(&logging.MockLogger{}, &dmock.IdentityProvider{}, &dmock.Deserializer{}, map[idriver.IdentityRoleType]wallet.RoleRegistry{idriver.OwnerRole: reg})
+	notified := 0
+	s.OnOwnerIdentityRegistered(func() { notified++ })
+
+	require.NoError(t, s.RegisterOwnerIdentity(ctx, driver.IdentityConfiguration{}))
+	require.Equal(t, 1, notified)
+
+	// a failed registration must not notify
+	reg.RegisterIdentityReturns(errors.New("boom"))
+	require.Error(t, s.RegisterOwnerIdentity(ctx, driver.IdentityConfiguration{}))
+	require.Equal(t, 1, notified)
+}
+
 func TestGettersForwarding(t *testing.T) {
 	ctx := t.Context()
 	ip := &dmock.IdentityProvider{}

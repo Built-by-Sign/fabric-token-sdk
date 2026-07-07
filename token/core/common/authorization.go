@@ -8,6 +8,7 @@ package common
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/LFDT-Panurus/panurus/token"
 	"github.com/LFDT-Panurus/panurus/token/driver"
@@ -58,24 +59,48 @@ func NewTMSAuthorization(logger logging.Logger, publicParameters driver.PublicPa
 	auth := &WalletBasedAuthorization{Logger: logger, PublicParameters: publicParameters, WalletService: walletService, amIAnAuditor: amIAnAuditor}
 
 	if amIAnAuditor {
-		if ids, err := walletService.OwnerWalletIDs(context.Background()); err == nil && len(ids) == 0 {
-			return pureAuditorAuthorization{auth}
+		// The short-circuit is enabled only when the wallet service can signal later
+		// owner-identity registrations; the hook is attached before the emptiness check
+		// so a concurrent registration cannot be missed.
+		if notifier, ok := walletService.(ownerIdentityNotifier); ok {
+			pure := &pureAuditorAuthorization{Authorization: auth}
+			notifier.OnOwnerIdentityRegistered(pure.downgrade)
+			if ids, err := walletService.OwnerWalletIDs(context.Background()); err == nil && len(ids) == 0 {
+				return pure
+			}
 		}
 	}
 
 	return auth
 }
 
+// ownerIdentityNotifier is optionally implemented by wallet services that can signal
+// the registration of new owner identities.
+type ownerIdentityNotifier interface {
+	OnOwnerIdentityRegistered(func())
+}
+
 // pureAuditorAuthorization decorates an Authorization for a node that holds an auditor
 // wallet and no owner wallets: it can never own a token, so IsMine is short-circuited
 // and the owner lookup is skipped. All other checks delegate to the wrapped Authorization.
+// Registering an owner identity at runtime permanently downgrades it to plain delegation.
 type pureAuditorAuthorization struct {
 	Authorization
+	hasOwnerWallets atomic.Bool
 }
 
-// IsMine always reports the token as not owned, since the node holds no owner wallets.
-func (pureAuditorAuthorization) IsMine(context.Context, *token2.Token) (string, []string, bool) {
+// IsMine reports the token as not owned while the node holds no owner wallets;
+// once an owner identity is registered it delegates to the wrapped Authorization.
+func (p *pureAuditorAuthorization) IsMine(ctx context.Context, tok *token2.Token) (string, []string, bool) {
+	if p.hasOwnerWallets.Load() {
+		return p.Authorization.IsMine(ctx, tok)
+	}
+
 	return "", nil, false
+}
+
+func (p *pureAuditorAuthorization) downgrade() {
+	p.hasOwnerWallets.Store(true)
 }
 
 // IsMine returns true if the passed token is owned by an owner wallet.

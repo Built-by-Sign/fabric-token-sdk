@@ -44,7 +44,8 @@ func TestWalletBasedAuthorization(t *testing.T) {
 	t.Run("IsMine_PureAuditor_SkipsOwnerLookup", func(t *testing.T) {
 		ws.AuditorWalletReturns(&mock.AuditorWallet{}, nil)
 		ws.OwnerWalletIDsReturns(nil, nil)
-		auth := NewTMSAuthorization(logger, pp, ws)
+		nws := &notifyingWalletService{WalletService: ws}
+		auth := NewTMSAuthorization(logger, pp, nws)
 
 		before := ws.OwnerWalletCallCount()
 		walletID, ids, mine := auth.IsMine(context.Background(), &token2.Token{Owner: driver.Identity("owner-id")})
@@ -52,6 +53,38 @@ func TestWalletBasedAuthorization(t *testing.T) {
 		assert.Empty(t, walletID)
 		assert.Nil(t, ids)
 		assert.Equal(t, before, ws.OwnerWalletCallCount(), "pure auditor must not perform the owner lookup")
+	})
+
+	t.Run("IsMine_PureAuditor_DowngradesOnOwnerRegistration", func(t *testing.T) {
+		ws.AuditorWalletReturns(&mock.AuditorWallet{}, nil)
+		ws.OwnerWalletIDsReturns(nil, nil)
+		wallet := &mock.OwnerWallet{}
+		wallet.IDReturns("wallet-id")
+		ws.OwnerWalletReturns(wallet, nil)
+		nws := &notifyingWalletService{WalletService: ws}
+		auth := NewTMSAuthorization(logger, pp, nws)
+
+		_, _, mine := auth.IsMine(context.Background(), &token2.Token{Owner: driver.Identity("owner-id")})
+		assert.False(t, mine, "short-circuit active before any owner identity is registered")
+
+		nws.fireOwnerIdentityRegistered()
+
+		walletID, _, mine := auth.IsMine(context.Background(), &token2.Token{Owner: driver.Identity("owner-id")})
+		assert.True(t, mine, "registered owner identity must downgrade the short-circuit")
+		assert.Equal(t, "wallet-id", walletID)
+	})
+
+	t.Run("IsMine_PureAuditor_NoNotifier_SkipsShortCircuit", func(t *testing.T) {
+		ws.AuditorWalletReturns(&mock.AuditorWallet{}, nil)
+		ws.OwnerWalletIDsReturns(nil, nil)
+		wallet := &mock.OwnerWallet{}
+		wallet.IDReturns("wallet-id")
+		ws.OwnerWalletReturns(wallet, nil)
+		auth := NewTMSAuthorization(logger, pp, ws)
+
+		walletID, _, mine := auth.IsMine(context.Background(), &token2.Token{Owner: driver.Identity("owner-id")})
+		assert.True(t, mine, "without a registration notifier the owner lookup must stay in place")
+		assert.Equal(t, "wallet-id", walletID)
 	})
 
 	t.Run("IsMine_AuditorWithOwnerWallets_StillResolves", func(t *testing.T) {
@@ -184,4 +217,21 @@ func TestAuthorizationMultiplexer(t *testing.T) {
 		_, _, err = mux.OwnerType([]byte("invalid"))
 		require.Error(t, err)
 	})
+}
+
+// notifyingWalletService augments the mock WalletService with the optional
+// owner-identity registration notifier consumed by NewTMSAuthorization.
+type notifyingWalletService struct {
+	*mock.WalletService
+	listeners []func()
+}
+
+func (s *notifyingWalletService) OnOwnerIdentityRegistered(f func()) {
+	s.listeners = append(s.listeners, f)
+}
+
+func (s *notifyingWalletService) fireOwnerIdentityRegistered() {
+	for _, f := range s.listeners {
+		f()
+	}
 }
