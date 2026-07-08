@@ -65,7 +65,11 @@ func NewTMSAuthorization(logger logging.Logger, publicParameters driver.PublicPa
 		if notifier, ok := walletService.(ownerIdentityNotifier); ok {
 			pure := &pureAuditorAuthorization{Authorization: auth}
 			unsubscribe := notifier.OnOwnerIdentityRegistered(pure.downgrade)
-			if ids, err := walletService.OwnerWalletIDs(context.Background()); err == nil && len(ids) == 0 {
+			ids, err := walletService.OwnerWalletIDs(context.Background())
+			if err != nil {
+				logger.Debugf("failed to get owner wallet ids, skipping the pure-auditor short-circuit: %v", err)
+			}
+			if err == nil && len(ids) == 0 {
 				return pure
 			}
 			// not a pure auditor: the decorator is discarded, detach its hook

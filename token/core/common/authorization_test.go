@@ -100,6 +100,21 @@ func TestWalletBasedAuthorization(t *testing.T) {
 		assert.Equal(t, "wallet-id", walletID)
 	})
 
+	t.Run("IsMine_PureAuditor_OwnerWalletIDsError_SkipsShortCircuit", func(t *testing.T) {
+		ws.AuditorWalletReturns(&mock.AuditorWallet{}, nil)
+		ws.OwnerWalletIDsReturns(nil, errors.New("store unavailable"))
+		wallet := &mock.OwnerWallet{}
+		wallet.IDReturns("wallet-id")
+		ws.OwnerWalletReturns(wallet, nil)
+		nws := &notifyingWalletService{WalletService: ws}
+		auth := NewTMSAuthorization(logger, pp, nws)
+
+		walletID, _, mine := auth.IsMine(context.Background(), &token2.Token{Owner: driver.Identity("owner-id")})
+		assert.True(t, mine, "an owner-wallet probe failure must keep the owner lookup in place")
+		assert.Equal(t, "wallet-id", walletID)
+		assert.Zero(t, nws.activeListeners(), "discarded decorator must not leave its hook registered")
+	})
+
 	t.Run("IsMine_AuditorWithOwnerWallets_UnsubscribesHook", func(t *testing.T) {
 		ws.AuditorWalletReturns(&mock.AuditorWallet{}, nil)
 		ws.OwnerWalletIDsReturns([]string{"some-owner-wallet"}, nil)
