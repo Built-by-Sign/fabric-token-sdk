@@ -59,7 +59,7 @@ func TestRegisterOwnerIdentityNotifiesListeners(t *testing.T) {
 	reg := &wmock.RoleRegistry{}
 	s := wallet.NewService(&logging.MockLogger{}, &dmock.IdentityProvider{}, &dmock.Deserializer{}, map[idriver.IdentityRoleType]wallet.RoleRegistry{idriver.OwnerRole: reg})
 	notified := 0
-	s.OnOwnerIdentityRegistered(func() { notified++ })
+	unsubscribe := s.OnOwnerIdentityRegistered(func() { notified++ })
 
 	require.NoError(t, s.RegisterOwnerIdentity(ctx, driver.IdentityConfiguration{}))
 	require.Equal(t, 1, notified)
@@ -67,6 +67,12 @@ func TestRegisterOwnerIdentityNotifiesListeners(t *testing.T) {
 	// a failed registration must not notify
 	reg.RegisterIdentityReturns(errors.New("boom"))
 	require.Error(t, s.RegisterOwnerIdentity(ctx, driver.IdentityConfiguration{}))
+	require.Equal(t, 1, notified)
+
+	// an unregistered callback must not notify
+	unsubscribe()
+	reg.RegisterIdentityReturns(nil)
+	require.NoError(t, s.RegisterOwnerIdentity(ctx, driver.IdentityConfiguration{}))
 	require.Equal(t, 1, notified)
 }
 

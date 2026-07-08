@@ -100,6 +100,15 @@ func TestWalletBasedAuthorization(t *testing.T) {
 		assert.Equal(t, "wallet-id", walletID)
 	})
 
+	t.Run("IsMine_AuditorWithOwnerWallets_UnsubscribesHook", func(t *testing.T) {
+		ws.AuditorWalletReturns(&mock.AuditorWallet{}, nil)
+		ws.OwnerWalletIDsReturns([]string{"some-owner-wallet"}, nil)
+		nws := &notifyingWalletService{WalletService: ws}
+		NewTMSAuthorization(logger, pp, nws)
+
+		assert.Zero(t, nws.activeListeners(), "discarded decorator must not leave its hook registered")
+	})
+
 	auth := &WalletBasedAuthorization{
 		Logger:           logger,
 		PublicParameters: pp,
@@ -223,15 +232,27 @@ func TestAuthorizationMultiplexer(t *testing.T) {
 // owner-identity registration notifier consumed by NewTMSAuthorization.
 type notifyingWalletService struct {
 	*mock.WalletService
-	listeners []func()
+	listeners map[int]func()
+	seq       int
 }
 
-func (s *notifyingWalletService) OnOwnerIdentityRegistered(f func()) {
-	s.listeners = append(s.listeners, f)
+func (s *notifyingWalletService) OnOwnerIdentityRegistered(f func()) func() {
+	if s.listeners == nil {
+		s.listeners = map[int]func(){}
+	}
+	id := s.seq
+	s.seq++
+	s.listeners[id] = f
+
+	return func() { delete(s.listeners, id) }
 }
 
 func (s *notifyingWalletService) fireOwnerIdentityRegistered() {
 	for _, f := range s.listeners {
 		f()
 	}
+}
+
+func (s *notifyingWalletService) activeListeners() int {
+	return len(s.listeners)
 }

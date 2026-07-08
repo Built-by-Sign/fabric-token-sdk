@@ -8,7 +8,6 @@ package wallet
 
 import (
 	"context"
-	"slices"
 	"sync"
 
 	tdriver "github.com/LFDT-Panurus/panurus/token/driver"
@@ -55,7 +54,8 @@ type Service struct {
 	RoleRegistries   RoleRegistries
 
 	ownerListenersMu sync.Mutex
-	ownerListeners   []func()
+	ownerListeners   map[uint64]func()
+	ownerListenerSeq uint64
 }
 
 // NewService creates a new wallet Service.
@@ -80,7 +80,10 @@ func (s *Service) RegisterOwnerIdentity(ctx context.Context, config tdriver.Iden
 	}
 
 	s.ownerListenersMu.Lock()
-	listeners := slices.Clone(s.ownerListeners)
+	listeners := make([]func(), 0, len(s.ownerListeners))
+	for _, f := range s.ownerListeners {
+		listeners = append(listeners, f)
+	}
 	s.ownerListenersMu.Unlock()
 	for _, f := range listeners {
 		f()
@@ -90,11 +93,22 @@ func (s *Service) RegisterOwnerIdentity(ctx context.Context, config tdriver.Iden
 }
 
 // OnOwnerIdentityRegistered registers a callback invoked after each successful
-// owner-identity registration.
-func (s *Service) OnOwnerIdentityRegistered(f func()) {
+// owner-identity registration. The returned function unregisters the callback.
+func (s *Service) OnOwnerIdentityRegistered(f func()) func() {
 	s.ownerListenersMu.Lock()
 	defer s.ownerListenersMu.Unlock()
-	s.ownerListeners = append(s.ownerListeners, f)
+	if s.ownerListeners == nil {
+		s.ownerListeners = map[uint64]func(){}
+	}
+	id := s.ownerListenerSeq
+	s.ownerListenerSeq++
+	s.ownerListeners[id] = f
+
+	return func() {
+		s.ownerListenersMu.Lock()
+		defer s.ownerListenersMu.Unlock()
+		delete(s.ownerListeners, id)
+	}
 }
 
 // RegisterIssuerIdentity registers a long-term issuer identity using the issuer registry.

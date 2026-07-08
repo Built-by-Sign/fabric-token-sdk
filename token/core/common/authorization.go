@@ -64,10 +64,12 @@ func NewTMSAuthorization(logger logging.Logger, publicParameters driver.PublicPa
 		// so a concurrent registration cannot be missed.
 		if notifier, ok := walletService.(ownerIdentityNotifier); ok {
 			pure := &pureAuditorAuthorization{Authorization: auth}
-			notifier.OnOwnerIdentityRegistered(pure.downgrade)
+			unsubscribe := notifier.OnOwnerIdentityRegistered(pure.downgrade)
 			if ids, err := walletService.OwnerWalletIDs(context.Background()); err == nil && len(ids) == 0 {
 				return pure
 			}
+			// not a pure auditor: the decorator is discarded, detach its hook
+			unsubscribe()
 		}
 	}
 
@@ -75,9 +77,9 @@ func NewTMSAuthorization(logger logging.Logger, publicParameters driver.PublicPa
 }
 
 // ownerIdentityNotifier is optionally implemented by wallet services that can signal
-// the registration of new owner identities.
+// the registration of new owner identities. The returned function unregisters the callback.
 type ownerIdentityNotifier interface {
-	OnOwnerIdentityRegistered(func())
+	OnOwnerIdentityRegistered(func()) func()
 }
 
 // pureAuditorAuthorization decorates an Authorization for a node that holds an auditor
